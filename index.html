@@ -68,12 +68,15 @@ button[disabled]{opacity:.35;cursor:default}
 /* Phase 2.5 – 竜カラー表 */
 .ph-25{border-color:#888;background:#fff}
 .ph-25 .ph-t{color:#444}
-.ph-25 li{color:#333}
-.d-green {color:#1a8c1a;font-weight:bold}
-.d-purple{color:#8822cc;font-weight:bold}
-.d-white {color:#888;font-weight:bold;border:1px solid #bbb;border-radius:3px;padding:0 3px;background:#f5f5f5}
-.d-red   {color:#cc1a1a;font-weight:bold}
-.d-black {color:#222;font-weight:bold}
+.dragon-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+.dragon-tbl th{background:#eee;color:#333;padding:3px 6px;border:1px solid #ccc;text-align:center;font-weight:bold}
+.dragon-tbl td{padding:3px 6px;border:1px solid #ddd;color:#333;vertical-align:middle}
+.dragon-tbl td:first-child{text-align:center;font-weight:bold;font-size:14px;white-space:nowrap}
+.d-green {color:#1a8c1a}
+.d-purple{color:#8822cc}
+.d-white {color:#888;border:1px solid #bbb;border-radius:3px;padding:1px 4px;background:#f5f5f5;font-size:11px}
+.d-red   {color:#cc1a1a}
+.d-black {color:#111}
 </style>
 </head>
 <body>
@@ -137,13 +140,18 @@ button[disabled]{opacity:.35;cursor:default}
 
       <div class="ph ph-25">
         <div class="ph-t">【Phase 2.5】竜の属性・耐性メモ 🐉</div>
-        <ul>
-          <li><span class="d-green">●緑</span>：毒鎧　聖耐性</li>
-          <li><span class="d-purple">●紫</span>：念鎧　念耐性、物理反射</li>
-          <li><span class="d-white">●白</span>：念鎧　毒耐性（テトラあり）</li>
-          <li><span class="d-red">●赤</span>：念鎧　聖耐性、魔法反射</li>
-          <li><span class="d-black">●黒</span>：念鎧　毒耐性</li>
-        </ul>
+        <table class="dragon-tbl">
+          <thead>
+            <tr><th>色</th><th>鎧</th><th>耐性・特性</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="d-green">●緑</span></td><td>毒鎧</td><td>聖耐性</td></tr>
+            <tr><td><span class="d-purple">●紫</span></td><td>念鎧</td><td>念耐性、物理反射</td></tr>
+            <tr><td><span class="d-white">●白</span></td><td>念鎧</td><td>毒耐性（テトラあり）</td></tr>
+            <tr><td><span class="d-red">●赤</span></td><td>念鎧</td><td>聖耐性、魔法反射</td></tr>
+            <tr><td><span class="d-black">●黒</span></td><td>念鎧</td><td>毒耐性</td></tr>
+          </tbody>
+        </table>
       </div>
 
       <div class="ph ph-3">
