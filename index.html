@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>次元犯罪者リゲル☆4 戦闘タイマー</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#09090f;color:#d4d4e8;font-family:'Yu Gothic','Meiryo','Segoe UI',sans-serif;font-size:13px;overflow:hidden}
+
+#app{display:grid;grid-template-rows:auto 1fr;height:100vh;padding:5px;gap:5px}
+
+/* ── Header ── */
+#hdr{background:#111128;border:1px solid #252550;border-radius:8px;padding:6px 12px;display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+#appTitle{font-size:15px;font-weight:bold;color:#ff6868;white-space:nowrap;flex-shrink:0}
+.hgrp{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+#roomInput{background:#1a1a32;border:1px solid #3a3a6a;color:#d4d4e8;padding:4px 7px;border-radius:5px;font-size:12px;width:172px}
+#roomInput::placeholder{color:#555}
+button{border:none;border-radius:5px;cursor:pointer;font-weight:bold;transition:filter .15s;white-space:nowrap}
+button:hover:not([disabled]){filter:brightness(1.2)}
+button[disabled]{opacity:.35;cursor:default}
+.b-host{background:#2a6fdd;color:#fff;padding:4px 10px;font-size:12px}
+.b-join{background:#229955;color:#fff;padding:4px 10px;font-size:12px}
+.b-start{background:#d95520;color:#fff;padding:6px 18px;font-size:15px}
+.b-reset{background:#4a4a5a;color:#ccc;padding:6px 12px;font-size:14px}
+.b-dragon{background:linear-gradient(130deg,#6a18cc 0%,#c83aff 100%);color:#fff;padding:7px 0;font-size:15px;width:100%}
+#badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#222;color:#777;white-space:nowrap}
+#badge.ok{background:#0b2e16;color:#3ddd7a}
+#badge.err{background:#2e0b0b;color:#ff5555}
+#roomTag{font-size:11px;font-family:'Courier New',monospace;color:#44c8ff;background:#0a1e28;border:1px solid #1a4060;border-radius:4px;padding:2px 8px;cursor:pointer;display:none;user-select:none}
+#pCount{font-size:11px;color:#888}
+
+/* ── Body grid ── */
+#body{display:grid;grid-template-columns:38% 62%;gap:5px;min-height:0}
+
+/* ── Left panel ── */
+#left{background:#0c0c1a;border:1px solid #222244;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px;min-height:0;overflow:hidden}
+#clock{text-align:center;font-family:'Courier New',monospace;font-size:74px;font-weight:bold;color:#00e07a;text-shadow:0 0 20px rgba(0,220,120,.55);letter-spacing:2px;line-height:1;transition:color .2s,text-shadow .2s}
+#clock.danger{color:#ff3838;text-shadow:0 0 20px rgba(255,50,50,.7)}
+#warnBox{text-align:center;font-size:19px;font-weight:bold;color:#ff2222;padding:4px 6px;border-radius:6px;min-height:32px;background:rgba(255,20,20,.1);border:2px solid transparent;visibility:hidden}
+#warnBox.on{visibility:visible;border-color:#ff3333;animation:blk .5s step-start infinite}
+@keyframes blk{50%{opacity:0}}
+.ctrl-row{display:flex;gap:8px;justify-content:center}
+#nxtWarn{text-align:center;font-size:12px;color:#ffbb33;min-height:16px}
+#kyouranBar{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;color:#888}
+#kyouranProgress{flex:1;max-width:160px;height:6px;background:#222;border-radius:3px;overflow:hidden}
+#kyouranFill{height:100%;width:0%;background:linear-gradient(90deg,#00cc66,#ffcc00,#ff4444);border-radius:3px;transition:width .2s}
+#info{font-size:11px;color:#555;text-align:center;margin-top:auto}
+
+/* ── Right panel ── */
+#right{background:#0c0c1a;border:1px solid #222244;border-radius:8px;padding:9px 10px;overflow-y:auto;min-height:0}
+.crib-hdr{text-align:center;font-size:11px;color:#555;padding-bottom:5px;border-bottom:1px solid #1e1e3a;margin-bottom:6px}
+.ph{border-left:4px solid;border-radius:0 5px 5px 0;padding:5px 8px;margin-bottom:6px}
+.ph-1{border-color:#3a7fff;background:rgba(58,127,255,.07)}
+.ph-2{border-color:#b840ff;background:rgba(184,64,255,.07)}
+.ph-3{border-color:#ff9922;background:rgba(255,153,34,.07)}
+.ph-4{border-color:#ff3333;background:rgba(255,51,51,.07)}
+.ph-t{font-size:13px;font-weight:bold;margin-bottom:3px}
+.ph-1 .ph-t{color:#5a9fff}
+.ph-2 .ph-t{color:#cc55ff}
+.ph-3 .ph-t{color:#ffaa33}
+.ph-4 .ph-t{color:#ff5555}
+.ph ul{padding-left:13px}
+.ph li{color:#b8b8cc;line-height:1.44;font-size:12px;margin-bottom:1px}
+.ph li b{color:#e8e8f4}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="hdr">
+    <span id="appTitle">⚔ 次元犯罪者リゲル☆4 戦闘タイマー</span>
+    <div class="hgrp">
+      <input id="roomInput" type="text" placeholder="ルームID（空白=自動生成）" maxlength="24"/>
+      <button class="b-host" id="btnHost" onclick="createRoom()">ルーム作成（ホスト）</button>
+      <button class="b-join" id="btnJoin" onclick="joinRoom()">ルーム参加（ゲスト）</button>
+    </div>
+    <span id="badge">未接続</span>
+    <span id="roomTag" onclick="copyRoom()" title="クリックでコピー"></span>
+    <span id="pCount"></span>
+  </div>
+
+  <!-- BODY -->
+  <div id="body">
+
+    <!-- LEFT: Timer -->
+    <div id="left">
+      <div id="clock">00:00</div>
+      <div id="warnBox">⚠ 10秒後に狂乱発生！ ⚠</div>
+      <div class="ctrl-row">
+        <button class="b-start" onclick="act('start')">▶ 戦闘開始</button>
+        <button class="b-reset" onclick="act('reset')">■ リセット</button>
+      </div>
+      <button class="b-dragon" onclick="act('dragon')">🐉 竜ギミック発動（ワロン！）</button>
+      <div id="nxtWarn">― 待機中 ―</div>
+      <div id="kyouranBar">
+        <span>狂乱周期</span>
+        <div id="kyouranProgress"><div id="kyouranFill"></div></div>
+        <span id="kyouranSec">--s</span>
+      </div>
+      <div id="info">ルームを作成／参加してからタイマーを操作してください</div>
+    </div>
+
+    <!-- RIGHT: Crib sheet -->
+    <div id="right">
+      <div class="crib-hdr">▼ フェーズ別カンペ（次元犯罪者リゲル☆4）</div>
+
+      <div class="ph ph-1">
+        <div class="ph-t">【Phase 1】開幕〜HP80%</div>
+        <ul>
+          <li>配置：<b>壁は左固定</b> / 後衛は右散開（3セル以上・重複厳禁）</li>
+          <li>左シフト時：左にズレたら<b>即元の位置に戻る</b>（目玉爆発の重複防止）</li>
+          <li>支援：全体ガンバン周期、消されたSW・ニュマを<b>即再設置</b></li>
+        </ul>
+      </div>
+
+      <div class="ph ph-2">
+        <div class="ph-t">【Phase 2】HP80%付近（竜ギミック）🐉</div>
+        <ul>
+          <li>トリガー：「<b>竜の呪い</b>」アイコン点灯 → 上の竜ボタンで全員に音声通知</li>
+          <li>裏担当：<b>鏡面世界へ即移動</b>し竜を最速全滅</li>
+          <li>表担当：<b>攻撃一時停止</b>・生存＆散開維持に専念</li>
+        </ul>
+      </div>
+
+      <div class="ph ph-3">
+        <div class="ph-t">【Phase 3】HP50%〜20%（分身・風即死）💨</div>
+        <ul>
+          <li>トリガー：ボス周囲に<b>雷撃</b>（全体大ダメージ）</li>
+          <li>全員：MHP9割ダメージ対策・<b>3%回復剤を先行連打</b>（スタン注意）</li>
+          <li>裏担当：鏡面世界へ即移動・<b>分身を秒殺</b>（LJ発動阻止）</li>
+          <li>表担当：風耐性デバフ中・<b>風肩＆イージス装備へ換装</b></li>
+        </ul>
+      </div>
+
+      <div class="ph ph-4">
+        <div class="ph-t">【Phase 4】HP20%以下（狂乱）🌀 ← <b>60秒周期</b>（左バー参照）</div>
+        <ul>
+          <li>前提：狂乱は戦闘開始から「<b>常に60秒周期</b>」で発生（警告は10秒前）</li>
+          <li>壁：<b>インスピレーション</b>状態を常時維持（必中通常攻撃を止めない）</li>
+          <li>支援：狂乱（座り）対象者に<b>クリアランス最速連打</b></li>
+          <li>火力：次の60秒周期が来る前に<b>全力バースト・削り切り！</b></li>
+        </ul>
+      </div>
+    </div>
+
+  </div><!-- /#body -->
+</div><!-- /#app -->
+
+<script>
+// ════════════════════════════════════════
+//  CONSTANTS
+// ════════════════════════════════════════
+// Warn 10 s before each 60-second kyouran cycle: 50, 110, 170, 230 …
+const WARNS = Array.from({length: 30}, (_, i) => 50 + i * 60);
+const KYOURAN_CYCLE = 60; // seconds
+
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
+let peer    = null;
+const conns = [];       // DataConnection[]
+let isHost  = false;
+let startTs = null;     // Unix ms when fight started (null = not running)
+let ticker  = null;
+const warned = new Set();
+let audioCtx = null;
+
+// ════════════════════════════════════════
+//  AUDIO – Web Audio API
+// ════════════════════════════════════════
+function unlockAudio() {
+  if (audioCtx) { audioCtx.resume(); return; }
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume();
+  } catch (e) { console.warn('AudioContext:', e); }
+}
+
+function playBeep() {
+  if (!audioCtx) return;
+  // Three short pips: Pi Pi Pi
+  [0, 0.19, 0.38].forEach(delay => {
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 900;
+    const t = audioCtx.currentTime + delay;
+    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    osc.start(t);
+    osc.stop(t + 0.15);
+  });
+}
+
+// ════════════════════════════════════════
+//  AUDIO – SpeechSynthesis
+// ════════════════════════════════════════
+function speakWaron() {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u   = new SpeechSynthesisUtterance('ワロン！');
+    u.lang    = 'ja-JP';
+    u.rate    = 0.85;
+    u.pitch   = 1.1;
+    u.volume  = 1;
+    speechSynthesis.speak(u);
+  } catch (e) { console.warn('SpeechSynthesis:', e); }
+}
+
+// ════════════════════════════════════════
+//  TIMER
+// ════════════════════════════════════════
+const pad2 = n => String(n).padStart(2, '0');
+const fmt  = s => `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
+
+function doStart(ts) {
+  if (ticker) clearInterval(ticker);
+  startTs = ts;
+  warned.clear();
+  ticker = setInterval(tick, 200);
+  tick();
+}
+
+function doReset() {
+  if (ticker) clearInterval(ticker);
+  ticker  = null;
+  startTs = null;
+  warned.clear();
+  el('clock').textContent = '00:00';
+  el('clock').classList.remove('danger');
+  setWarn(false);
+  el('nxtWarn').textContent  = '― 待機中 ―';
+  el('nxtWarn').style.color  = '#ffbb33';
+  el('kyouranFill').style.width = '0%';
+  el('kyouranSec').textContent  = '--s';
+}
+
+function tick() {
+  if (startTs === null) return;
+  const elapsed = Math.floor((Date.now() - startTs) / 1000);
+  el('clock').textContent = fmt(elapsed);
+
+  // Kyouran cycle progress bar (position within current 60-second window)
+  const posInCycle  = elapsed % KYOURAN_CYCLE;
+  const pct         = (posInCycle / KYOURAN_CYCLE) * 100;
+  el('kyouranFill').style.width = pct + '%';
+  el('kyouranSec').textContent  = posInCycle + 's';
+
+  // Next warning display
+  const nxt = WARNS.find(t => t > elapsed);
+  const nEl = el('nxtWarn');
+  if (nxt !== undefined) {
+    const rem = nxt - elapsed;
+    nEl.textContent = `次の狂乱警告まで ${rem}秒  （${fmt(nxt)}〜${fmt(nxt + 10)}）`;
+    nEl.style.color = rem <= 15 ? '#ff7744' : '#ffbb33';
+  } else {
+    nEl.textContent = '警告スケジュール終了';
+    nEl.style.color = '#666';
+  }
+
+  // Fire warnings
+  WARNS.forEach(t => {
+    if (!warned.has(t) && elapsed >= t && elapsed < t + 10) {
+      warned.add(t);
+      setWarn(true);
+      playBeep();
+      setTimeout(() => setWarn(false), 9500);
+    }
+  });
+}
+
+function setWarn(on) {
+  el('warnBox').classList.toggle('on', on);
+  el('clock').classList.toggle('danger', on);
+}
+
+// ════════════════════════════════════════
+//  PEERJS – Setup
+// ════════════════════════════════════════
+function createRoom() {
+  unlockAudio();
+  const inp = el('roomInput').value.trim();
+  const id  = inp || ('rigel-' + Math.random().toString(36).slice(2, 8));
+  isHost    = true;
+  initPeer(id, null);
+}
+
+function joinRoom() {
+  unlockAudio();
+  const hostId = el('roomInput').value.trim();
+  if (!hostId) { alert('ルームIDを入力してください。'); return; }
+  isHost = false;
+  initPeer(null, hostId);
+}
+
+function initPeer(myId, hostId) {
+  if (peer) peer.destroy();
+  conns.length = 0;
+  setBadge('接続中…', '');
+
+  peer = myId ? new Peer(myId) : new Peer();
+
+  peer.on('open', id => {
+    if (isHost) {
+      setBadge('ホスト 待機中', 'ok');
+      showTag(id);
+      el('btnHost').disabled = true;
+      setInfo('ルームIDをメンバーに共有してください');
+    } else {
+      setBadge('ホストへ接続中…', '');
+      const c = peer.connect(hostId, { reliable: true });
+      addConn(c, false);
+    }
+  });
+
+  // Host receives incoming guest connections
+  peer.on('connection', c => {
+    addConn(c, true);
+    // Send current timer state so late joiners sync immediately
+    c.on('open', () => {
+      if (startTs !== null) c.send({ k: 's', ts: startTs });
+    });
+  });
+
+  peer.on('error', err => {
+    const M = {
+      'unavailable-id'  : 'ルームIDが使用中です。別のIDを試してください。',
+      'peer-unavailable': 'ホストが見つかりません。ルームIDを確認してください。',
+      'network'         : 'ネットワークエラー。接続を確認してください。',
+      'server-error'    : 'シグナリングサーバーエラー。しばらく後に再試行してください。',
+    };
+    setBadge(M[err.type] || ('エラー: ' + err.type), 'err');
+    console.error('Peer error:', err);
+  });
+}
+
+function addConn(c, incoming) {
+  conns.push(c);
+
+  c.on('open', () => {
+    if (!incoming) {
+      // Guest successfully connected to host
+      setBadge('ルーム参加中', 'ok');
+      el('btnHost').disabled = true;
+      el('btnJoin').disabled = true;
+      setInfo('ホストの操作でタイマーが同期します');
+    }
+    updCount();
+  });
+
+  c.on('data', msg => {
+    handleMsg(msg);
+    // Host relays message to all other guests (hub-and-spoke)
+    if (isHost) conns.forEach(oc => { if (oc !== c && oc.open) oc.send(msg); });
+  });
+
+  c.on('close', () => {
+    const i = conns.indexOf(c);
+    if (i >= 0) conns.splice(i, 1);
+    updCount();
+  });
+
+  c.on('error', e => console.warn('conn error', e));
+}
+
+function bcast(msg) {
+  conns.forEach(c => { if (c.open) c.send(msg); });
+}
+
+// ════════════════════════════════════════
+//  ACTIONS
+// ════════════════════════════════════════
+function act(type) {
+  unlockAudio();
+  let msg;
+  if      (type === 'start')  msg = { k: 's', ts: Date.now() };
+  else if (type === 'reset')  msg = { k: 'r' };
+  else if (type === 'dragon') msg = { k: 'd' };
+  else return;
+  handleMsg(msg); // apply locally
+  bcast(msg);     // send to all peers
+}
+
+function handleMsg(msg) {
+  if      (msg.k === 's') doStart(msg.ts);
+  else if (msg.k === 'r') doReset();
+  else if (msg.k === 'd') speakWaron();
+}
+
+// ════════════════════════════════════════
+//  UI HELPERS
+// ════════════════════════════════════════
+const el = id => document.getElementById(id);
+
+function setBadge(txt, cls) {
+  const b = el('badge');
+  b.textContent = txt;
+  b.className   = cls;
+}
+
+function showTag(id) {
+  const t = el('roomTag');
+  t.textContent   = '📋 ルームID: ' + id;
+  t.dataset.rid   = id;
+  t.style.display = 'inline';
+}
+
+function copyRoom() {
+  const t  = el('roomTag');
+  const id = t.dataset.rid;
+  if (!id) return;
+  const orig = '📋 ルームID: ' + id;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(id)
+      .then(() => { t.textContent = '✓ コピー済: ' + id; setTimeout(() => { t.textContent = orig; }, 2000); })
+      .catch(() => prompt('ルームIDをコピーしてください:', id));
+  } else {
+    prompt('ルームIDをコピーしてください:', id);
+  }
+}
+
+function setInfo(txt) { el('info').textContent = txt; }
+
+function updCount() {
+  const active = conns.filter(c => c.open).length;
+  el('pCount').textContent = active ? '👥 ' + (active + 1) + '人' : '';
+  if (isHost) setBadge('ホスト（' + active + '人接続中）', 'ok');
+}
+</script>
+</body>
+</html>
