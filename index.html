@@ -38,8 +38,9 @@ button[disabled]{opacity:.35;cursor:default}
 #left{background:#0c0c1a;border:1px solid #222244;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px;min-height:0;overflow:hidden}
 #clock{text-align:center;font-family:'Courier New',monospace;font-size:74px;font-weight:bold;color:#00e07a;text-shadow:0 0 20px rgba(0,220,120,.55);letter-spacing:2px;line-height:1;transition:color .2s,text-shadow .2s}
 #clock.danger{color:#ff3838;text-shadow:0 0 20px rgba(255,50,50,.7)}
-#warnBox{text-align:center;font-size:19px;font-weight:bold;color:#ff2222;padding:4px 6px;border-radius:6px;min-height:32px;background:rgba(255,20,20,.1);border:2px solid transparent;visibility:hidden}
-#warnBox.on{visibility:visible;border-color:#ff3333;animation:blk .5s step-start infinite}
+#warnBox{text-align:center;font-size:19px;font-weight:bold;padding:4px 6px;border-radius:6px;min-height:32px;border:2px solid transparent;visibility:hidden}
+#warnBox.w20{visibility:visible;color:#ffaa00;background:rgba(255,170,0,.12);border-color:#ffaa00}
+#warnBox.w10{visibility:visible;color:#ff2222;background:rgba(255,20,20,.1);border-color:#ff3333;animation:blk .5s step-start infinite}
 @keyframes blk{50%{opacity:0}}
 .ctrl-row{display:flex;gap:8px;justify-content:center}
 #nxtWarn{text-align:center;font-size:12px;color:#ffbb33;min-height:16px}
@@ -153,8 +154,10 @@ button[disabled]{opacity:.35;cursor:default}
 // ════════════════════════════════════════
 //  CONSTANTS
 // ════════════════════════════════════════
-// Warn 10 s before each 60-second kyouran cycle: 50, 110, 170, 230 …
-const WARNS = Array.from({length: 30}, (_, i) => 50 + i * 60);
+// 狂乱20秒前コール: 40, 100, 160, 220 …
+const WARN_20 = Array.from({length: 30}, (_, i) => 40 + i * 60);
+// 狂乱10秒前コール: 50, 110, 170, 230 …
+const WARN_10 = Array.from({length: 30}, (_, i) => 50 + i * 60);
 const KYOURAN_CYCLE = 60; // seconds
 
 // ════════════════════════════════════════
@@ -179,22 +182,17 @@ function unlockAudio() {
   } catch (e) { console.warn('AudioContext:', e); }
 }
 
-function playBeep() {
-  if (!audioCtx) return;
-  // Three short pips: Pi Pi Pi
-  [0, 0.19, 0.38].forEach(delay => {
-    const osc  = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = 'sine';
-    osc.frequency.value = 900;
-    const t = audioCtx.currentTime + delay;
-    gain.gain.setValueAtTime(0.5, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
-    osc.start(t);
-    osc.stop(t + 0.15);
-  });
+function speakText(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u  = new SpeechSynthesisUtterance(text);
+    u.lang   = 'ja-JP';
+    u.rate   = 0.85;
+    u.pitch  = 1.1;
+    u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch(e) { console.warn('speakText:', e); }
 }
 
 // ════════════════════════════════════════
@@ -234,7 +232,7 @@ function doReset() {
   warned.clear();
   el('clock').textContent = '00:00';
   el('clock').classList.remove('danger');
-  setWarn(false);
+  setWarn('off');
   el('nxtWarn').textContent  = '― 待機中 ―';
   el('nxtWarn').style.color  = '#ffbb33';
   el('kyouranFill').style.width = '0%';
@@ -252,32 +250,56 @@ function tick() {
   el('kyouranFill').style.width = pct + '%';
   el('kyouranSec').textContent  = posInCycle + 's';
 
-  // Next warning display
-  const nxt = WARNS.find(t => t > elapsed);
+  // Next warning display（20秒前・10秒前のうち直近を表示）
   const nEl = el('nxtWarn');
-  if (nxt !== undefined) {
-    const rem = nxt - elapsed;
-    nEl.textContent = `次の狂乱警告まで ${rem}秒  （${fmt(nxt)}〜${fmt(nxt + 10)}）`;
+  const allNext = [
+    ...WARN_20.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'狂乱20秒前'})),
+    ...WARN_10.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'10秒前'})),
+  ].sort((a, b) => a.t - b.t);
+  if (allNext.length) {
+    const {t, label} = allNext[0];
+    const rem = t - elapsed;
+    nEl.textContent = `次のコール「${label}」まで ${rem}秒  (${fmt(t)})`;
     nEl.style.color = rem <= 15 ? '#ff7744' : '#ffbb33';
   } else {
     nEl.textContent = '警告スケジュール終了';
     nEl.style.color = '#666';
   }
 
-  // Fire warnings
-  WARNS.forEach(t => {
-    if (!warned.has(t) && elapsed >= t && elapsed < t + 10) {
-      warned.add(t);
-      setWarn(true);
-      playBeep();
-      setTimeout(() => setWarn(false), 9500);
+  // 20秒前コール（音声）
+  WARN_20.forEach(t => {
+    if (!warned.has('20_' + t) && elapsed >= t && elapsed < t + 5) {
+      warned.add('20_' + t);
+      speakText('狂乱20秒前');
+      setWarn('20');
+      setTimeout(() => setWarn('off'), 4500);
+    }
+  });
+
+  // 10秒前コール（音声）
+  WARN_10.forEach(t => {
+    if (!warned.has('10_' + t) && elapsed >= t && elapsed < t + 5) {
+      warned.add('10_' + t);
+      speakText('10秒前');
+      setWarn('10');
+      setTimeout(() => setWarn('off'), 9500);
     }
   });
 }
 
-function setWarn(on) {
-  el('warnBox').classList.toggle('on', on);
-  el('clock').classList.toggle('danger', on);
+function setWarn(type) {
+  const box = el('warnBox');
+  const clk = el('clock');
+  box.className = '';
+  clk.classList.remove('danger');
+  if (type === '20') {
+    box.textContent = '🔶 狂乱まで20秒！';
+    box.classList.add('w20');
+  } else if (type === '10') {
+    box.textContent = '⚠ 狂乱まで10秒！ ⚠';
+    box.classList.add('w10');
+    clk.classList.add('danger');
+  }
 }
 
 // ════════════════════════════════════════
