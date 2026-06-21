@@ -111,28 +111,26 @@ button[disabled]{opacity:.35;cursor:default}
       <div class="ph ph-1">
         <div class="ph-t">【Phase 1】開幕〜HP80%</div>
         <ul>
-          <li>配置：<b>壁は左固定</b> / 後衛は右散開（3セル以上・重複厳禁）</li>
-          <li>左シフト時：左にズレたら<b>即元の位置に戻る</b>（目玉爆発の重複防止）</li>
-          <li>支援：全体ガンバン周期、消されたSW・ニュマを<b>即再設置</b></li>
+          <li>配置：<b>壁は左固定</b> / 後衛は右散開（2セル以上・重複厳禁）</li>
+          <li>支援：<b>アスム更新</b>（金剛更新時も更新）</li>
         </ul>
       </div>
 
       <div class="ph ph-2">
         <div class="ph-t">【Phase 2】HP80%付近（竜ギミック）🐉</div>
         <ul>
-          <li>トリガー：「<b>竜の呪い</b>」アイコン点灯 → 上の竜ボタンで全員に音声通知</li>
-          <li>裏担当：<b>鏡面世界へ即移動</b>し竜を最速全滅</li>
-          <li>表担当：<b>攻撃一時停止</b>・生存＆散開維持に専念</li>
+          <li>トリガー：「<b>竜の呪い</b>」アイコン点灯 → 竜ボタンで全員に音声通知</li>
+          <li>裏担当：（物理推奨）<b>鏡面世界へ即移動</b>し竜を倒す</li>
+          <li>支援：<b>アスム更新</b>、クリアランス準備</li>
+          <li>表担当：一人は<b>オーブを黄色に3つ変更</b>する係。壁近くの人は可能なら壁横のを変える</li>
         </ul>
       </div>
 
       <div class="ph ph-3">
-        <div class="ph-t">【Phase 3】HP50%〜20%（分身・風即死）💨</div>
+        <div class="ph-t">【Phase 3】HP50%〜20%（分身）</div>
         <ul>
-          <li>トリガー：ボス周囲に<b>雷撃</b>（全体大ダメージ）</li>
-          <li>全員：MHP9割ダメージ対策・<b>3%回復剤を先行連打</b>（スタン注意）</li>
-          <li>裏担当：鏡面世界へ即移動・<b>分身を秒殺</b>（LJ発動阻止）</li>
-          <li>表担当：風耐性デバフ中・<b>風肩＆イージス装備へ換装</b></li>
+          <li><b>フロスト状態</b>になったらクリアランスで解除して回る</li>
+          <li>裏分身が死んだら<b>壁にクリアランス</b>する</li>
         </ul>
       </div>
 
@@ -140,9 +138,8 @@ button[disabled]{opacity:.35;cursor:default}
         <div class="ph-t">【Phase 4】HP20%以下（狂乱）🌀 ← <b>60秒周期</b>（左バー参照）</div>
         <ul>
           <li>前提：狂乱は戦闘開始から「<b>常に60秒周期</b>」で発生（警告は10秒前）</li>
-          <li>壁：<b>インスピレーション</b>状態を常時維持（必中通常攻撃を止めない）</li>
-          <li>支援：狂乱（座り）対象者に<b>クリアランス最速連打</b></li>
-          <li>火力：次の60秒周期が来る前に<b>全力バースト・削り切り！</b></li>
+          <li>支援：狂乱（座り）・フロスト状態に<b>クリアランス</b>、<b>アスム更新</b></li>
+          <li>火力：次の60秒周期がきそうだったら<b>一回攻撃停止</b>して狂乱解除に備えて良い</li>
         </ul>
       </div>
     </div>
@@ -308,7 +305,7 @@ function setWarn(type) {
 function createRoom() {
   unlockAudio();
   const inp = el('roomInput').value.trim();
-  const id  = inp || String(Math.floor(10000 + Math.random() * 90000));
+  const id  = inp || String(Math.floor(1000 + Math.random() * 9000));
   isHost    = true;
   initPeer(id, null);
 }
