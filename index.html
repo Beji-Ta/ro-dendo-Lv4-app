@@ -308,7 +308,7 @@ function setWarn(type) {
 function createRoom() {
   unlockAudio();
   const inp = el('roomInput').value.trim();
-  const id  = inp || ('rigel-' + Math.random().toString(36).slice(2, 8));
+  const id  = inp || String(Math.floor(10000 + Math.random() * 90000));
   isHost    = true;
   initPeer(id, null);
 }
