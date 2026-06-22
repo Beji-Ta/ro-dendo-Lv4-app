@@ -27,6 +27,7 @@ button[disabled]{opacity:.35;cursor:default}
 .b-offset{background:#333;color:#777;padding:6px 10px;font-size:13px;border:1px solid #555}
 .b-offset.on{background:#1a6a44;color:#44ffaa;border-color:#44ffaa}
 .b-dragon{background:linear-gradient(130deg,#6a18cc 0%,#c83aff 100%);color:#fff;padding:7px 0;font-size:15px;width:100%}
+.b-court{background:linear-gradient(130deg,#0a5a8a 0%,#1a9adf 100%);color:#fff;padding:6px 0;font-size:14px;width:100%}
 #badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#222;color:#777;white-space:nowrap}
 #badge.ok{background:#0b2e16;color:#3ddd7a}
 #badge.err{background:#2e0b0b;color:#ff5555}
@@ -116,6 +117,7 @@ button[disabled]{opacity:.35;cursor:default}
         <div id="kyouranProgress"><div id="kyouranFill"></div></div>
         <span id="kyouranSec">--s</span>
       </div>
+      <button class="b-court" onclick="act('court')">🛡 コート！</button>
       <div id="info">ルームを作成／参加してからタイマーを操作してください</div>
     </div>
 
@@ -440,6 +442,7 @@ function act(type) {
   if      (type === 'start')  msg = { k: 's', ts: Date.now(), off: kyouranOffset };
   else if (type === 'reset')  msg = { k: 'r' };
   else if (type === 'dragon') msg = { k: 'd' };
+  else if (type === 'court')  msg = { k: 'c' };
   else return;
   handleMsg(msg); // apply locally
   bcast(msg);     // send to all peers
@@ -449,6 +452,7 @@ function handleMsg(msg) {
   if      (msg.k === 's') doStart(msg.ts, msg.off);
   else if (msg.k === 'r') doReset();
   else if (msg.k === 'd') speakWaron();
+  else if (msg.k === 'c') speakText('コート・ワロン！');
 }
 
 function toggleOffset() {
