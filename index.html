@@ -24,6 +24,8 @@ button[disabled]{opacity:.35;cursor:default}
 .b-join{background:#229955;color:#fff;padding:4px 10px;font-size:12px}
 .b-start{background:#d95520;color:#fff;padding:6px 18px;font-size:15px}
 .b-reset{background:#4a4a5a;color:#ccc;padding:6px 12px;font-size:14px}
+.b-offset{background:#333;color:#777;padding:6px 10px;font-size:13px;border:1px solid #555}
+.b-offset.on{background:#1a6a44;color:#44ffaa;border-color:#44ffaa}
 .b-dragon{background:linear-gradient(130deg,#6a18cc 0%,#c83aff 100%);color:#fff;padding:7px 0;font-size:15px;width:100%}
 #badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#222;color:#777;white-space:nowrap}
 #badge.ok{background:#0b2e16;color:#3ddd7a}
@@ -104,6 +106,7 @@ button[disabled]{opacity:.35;cursor:default}
       <div id="warnBox">⚠ 10秒後に狂乱発生！ ⚠</div>
       <div class="ctrl-row">
         <button class="b-start" onclick="act('start')">▶ 戦闘開始</button>
+        <button class="b-offset" id="btnOffset" onclick="toggleOffset()" title="+5秒ディレイON/OFF">+5秒</button>
         <button class="b-reset" onclick="act('reset')">■ リセット</button>
       </div>
       <button class="b-dragon" onclick="act('dragon')">🐉 竜ギミック発動（ワロン！）</button>
@@ -179,11 +182,10 @@ button[disabled]{opacity:.35;cursor:default}
 // ════════════════════════════════════════
 //  CONSTANTS
 // ════════════════════════════════════════
-// 狂乱20秒前コール: 40, 100, 160, 220 …
-const WARN_20 = Array.from({length: 30}, (_, i) => 40 + i * 60);
-// 狂乱10秒前コール: 50, 110, 170, 230 …
-const WARN_10 = Array.from({length: 30}, (_, i) => 50 + i * 60);
 const KYOURAN_CYCLE = 60; // seconds
+// warn配列はdoStart()時にoffsetを加味して生成
+let warn20 = [];
+let warn10 = [];
 
 // ════════════════════════════════════════
 //  STATE
@@ -195,6 +197,7 @@ let startTs = null;     // Unix ms when fight started (null = not running)
 let ticker  = null;
 const warned = new Set();
 let audioCtx = null;
+let kyouranOffset = 0;  // 0 or 5 (+5秒モード)
 
 // ════════════════════════════════════════
 //  AUDIO – Web Audio API
@@ -242,10 +245,17 @@ function speakWaron() {
 const pad2 = n => String(n).padStart(2, '0');
 const fmt  = s => `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
 
-function doStart(ts) {
+function doStart(ts, off) {
   if (ticker) clearInterval(ticker);
   startTs = ts;
+  kyouranOffset = (off === 5) ? 5 : 0;
+  // offset を加味してwarn配列を生成
+  warn20 = Array.from({length: 30}, (_, i) => (40 + kyouranOffset) + i * 60);
+  warn10 = Array.from({length: 30}, (_, i) => (50 + kyouranOffset) + i * 60);
   warned.clear();
+  // トグルボタンの見た目を同期（ゲスト含む）
+  el('btnOffset').classList.toggle('on', kyouranOffset === 5);
+  el('btnOffset').textContent = kyouranOffset === 5 ? '+5秒 ON' : '+5秒';
   ticker = setInterval(tick, 200);
   tick();
 }
@@ -269,17 +279,18 @@ function tick() {
   const elapsed = Math.floor((Date.now() - startTs) / 1000);
   el('clock').textContent = fmt(elapsed);
 
-  // Kyouran cycle progress bar (position within current 60-second window)
-  const posInCycle  = elapsed % KYOURAN_CYCLE;
-  const pct         = (posInCycle / KYOURAN_CYCLE) * 100;
+  // Kyouran cycle progress bar（offset後の経過でサイクル計算）
+  const effElapsed  = Math.max(0, elapsed - kyouranOffset);
+  const posInCycle  = effElapsed % KYOURAN_CYCLE;
+  const pct         = elapsed < kyouranOffset ? 0 : (posInCycle / KYOURAN_CYCLE) * 100;
   el('kyouranFill').style.width = pct + '%';
-  el('kyouranSec').textContent  = posInCycle + 's';
+  el('kyouranSec').textContent  = elapsed < kyouranOffset ? '--s' : posInCycle + 's';
 
   // Next warning display（20秒前・10秒前のうち直近を表示）
   const nEl = el('nxtWarn');
   const allNext = [
-    ...WARN_20.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'狂乱20秒前'})),
-    ...WARN_10.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'10秒前'})),
+    ...warn20.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'狂乱20秒前'})),
+    ...warn10.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'10秒前'})),
   ].sort((a, b) => a.t - b.t);
   if (allNext.length) {
     const {t, label} = allNext[0];
@@ -292,7 +303,7 @@ function tick() {
   }
 
   // 20秒前コール（音声）
-  WARN_20.forEach(t => {
+  warn20.forEach(t => {
     if (!warned.has('20_' + t) && elapsed >= t && elapsed < t + 5) {
       warned.add('20_' + t);
       speakText('狂乱20秒前');
@@ -302,7 +313,7 @@ function tick() {
   });
 
   // 10秒前コール（音声）
-  WARN_10.forEach(t => {
+  warn10.forEach(t => {
     if (!warned.has('10_' + t) && elapsed >= t && elapsed < t + 5) {
       warned.add('10_' + t);
       speakText('10秒前');
@@ -426,7 +437,7 @@ function bcast(msg) {
 function act(type) {
   unlockAudio();
   let msg;
-  if      (type === 'start')  msg = { k: 's', ts: Date.now() };
+  if      (type === 'start')  msg = { k: 's', ts: Date.now(), off: kyouranOffset };
   else if (type === 'reset')  msg = { k: 'r' };
   else if (type === 'dragon') msg = { k: 'd' };
   else return;
@@ -435,9 +446,16 @@ function act(type) {
 }
 
 function handleMsg(msg) {
-  if      (msg.k === 's') doStart(msg.ts);
+  if      (msg.k === 's') doStart(msg.ts, msg.off);
   else if (msg.k === 'r') doReset();
   else if (msg.k === 'd') speakWaron();
+}
+
+function toggleOffset() {
+  kyouranOffset = kyouranOffset === 0 ? 5 : 0;
+  const on = kyouranOffset === 5;
+  el('btnOffset').classList.toggle('on', on);
+  el('btnOffset').textContent = on ? '+5秒 ON' : '+5秒';
 }
 
 // ════════════════════════════════════════
