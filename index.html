@@ -82,6 +82,16 @@ button[disabled]{opacity:.35;cursor:default}
 .d-white {color:#888;border:1px solid #bbb;border-radius:3px;padding:1px 4px;background:#f5f5f5;font-size:11px}
 .d-red   {color:#cc1a1a}
 .d-black {color:#111}
+/* ── Phase toggle buttons ── */
+.ph-toggle-row{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap}
+.b-ph-toggle{font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid;cursor:pointer;font-weight:bold;transition:opacity .15s,filter .15s;white-space:nowrap}
+.b-ph-toggle.on{opacity:1}
+.b-ph-toggle.off{opacity:.35;filter:grayscale(.6)}
+.b-ph1{background:rgba(58,127,255,.2);color:#5a9fff;border-color:#3a7fff}
+.b-ph2{background:rgba(184,64,255,.2);color:#cc55ff;border-color:#b840ff}
+.b-ph25{background:rgba(150,150,150,.15);color:#aaa;border-color:#888}
+.b-ph3{background:rgba(255,153,34,.2);color:#ffaa33;border-color:#ff9922}
+.b-ph4{background:rgba(255,51,51,.2);color:#ff5555;border-color:#ff3333}
 </style>
 </head>
 <body>
@@ -127,8 +137,15 @@ button[disabled]{opacity:.35;cursor:default}
     <!-- RIGHT: Crib sheet -->
     <div id="right">
       <div class="crib-hdr">▼ フェーズ別カンペ（次元犯罪者リゲル☆4）</div>
+      <div class="ph-toggle-row">
+        <button class="b-ph-toggle b-ph1 on" id="btn-ph1" onclick="togglePh('ph1')">Ph1</button>
+        <button class="b-ph-toggle b-ph2 on" id="btn-ph2" onclick="togglePh('ph2')">Ph2</button>
+        <button class="b-ph-toggle b-ph25 on" id="btn-ph25" onclick="togglePh('ph25')">Ph2.5🐉</button>
+        <button class="b-ph-toggle b-ph3 on" id="btn-ph3" onclick="togglePh('ph3')">Ph3</button>
+        <button class="b-ph-toggle b-ph4 on" id="btn-ph4" onclick="togglePh('ph4')">Ph4</button>
+      </div>
 
-      <div class="ph ph-1">
+      <div class="ph ph-1" id="sec-ph1">
         <div class="ph-t">【Phase 1】開幕〜HP80%</div>
         <ul>
           <li>配置：<b>壁は左固定</b> / 後衛は右散開（2セル以上・重複厳禁）</li>
@@ -136,7 +153,7 @@ button[disabled]{opacity:.35;cursor:default}
         </ul>
       </div>
 
-      <div class="ph ph-2">
+      <div class="ph ph-2" id="sec-ph2">
         <div class="ph-t">【Phase 2】HP80%付近（竜ギミック）🐉</div>
         <ul>
           <li>トリガー：「<b>竜の呪い</b>」アイコン点灯 → 竜ボタンで全員に音声通知</li>
@@ -146,7 +163,7 @@ button[disabled]{opacity:.35;cursor:default}
         </ul>
       </div>
 
-      <div class="ph ph-25">
+      <div class="ph ph-25" id="sec-ph25">
         <div class="ph-t">【Phase 2.5】竜の属性・耐性メモ 🐉</div>
         <table class="dragon-tbl">
           <thead>
@@ -162,7 +179,7 @@ button[disabled]{opacity:.35;cursor:default}
         </table>
       </div>
 
-      <div class="ph ph-3">
+      <div class="ph ph-3" id="sec-ph3">
         <div class="ph-t">【Phase 3】HP50%〜20%（分身）</div>
         <ul>
           <li><b>フロスト状態</b>になったらクリアランスで解除して回る</li>
@@ -170,7 +187,7 @@ button[disabled]{opacity:.35;cursor:default}
         </ul>
       </div>
 
-      <div class="ph ph-4">
+      <div class="ph ph-4" id="sec-ph4">
         <div class="ph-t">【Phase 4】HP20%以下（狂乱）🌀 ← <b>60秒周期</b>（左バー参照）</div>
         <ul>
           <li>前提：狂乱は戦闘開始から「<b>常に60秒周期</b>」で発生（警告は10秒前）</li>
@@ -199,6 +216,15 @@ button[disabled]{opacity:.35;cursor:default}
 </div><!-- /#app -->
 
 <script>
+function togglePh(id) {
+  const sec = document.getElementById('sec-' + id);
+  const btn = document.getElementById('btn-' + id);
+  const hidden = sec.style.display === 'none';
+  sec.style.display = hidden ? '' : 'none';
+  btn.classList.toggle('on', hidden);
+  btn.classList.toggle('off', !hidden);
+}
+
 // ════════════════════════════════════════
 //  CONSTANTS
 // ════════════════════════════════════════
