@@ -92,6 +92,30 @@ button[disabled]{opacity:.35;cursor:default}
 .b-ph25{background:rgba(150,150,150,.15);color:#aaa;border-color:#888}
 .b-ph3{background:rgba(255,153,34,.2);color:#ffaa33;border-color:#ff9922}
 .b-ph4{background:rgba(255,51,51,.2);color:#ff5555;border-color:#ff3333}
+/* ── Phase card max-width ── */
+.ph{max-width:30em}
+/* ── Clock sizes ── */
+#clock.sz-md{font-size:52px}
+#clock.sz-sm{font-size:36px}
+/* ── Button sizes (medium) ── */
+#left.bsz-md .b-start{padding:4px 12px;font-size:13px}
+#left.bsz-md .b-reset{padding:4px 9px;font-size:12px}
+#left.bsz-md .b-offset{padding:4px 8px;font-size:11px}
+#left.bsz-md .b-dragon{padding:5px 0;font-size:13px}
+#left.bsz-md .b-court{padding:4px 0;font-size:12px}
+#left.bsz-md .b-help{padding:3px 0;font-size:11px}
+/* ── Button sizes (small) ── */
+#left.bsz-sm .b-start{padding:2px 8px;font-size:11px}
+#left.bsz-sm .b-reset{padding:2px 6px;font-size:10px}
+#left.bsz-sm .b-offset{padding:2px 5px;font-size:10px}
+#left.bsz-sm .b-dragon{padding:3px 0;font-size:11px}
+#left.bsz-sm .b-court{padding:2px 0;font-size:11px}
+#left.bsz-sm .b-help{padding:2px 0;font-size:10px}
+/* ── Size selector row ── */
+.size-row{display:flex;align-items:center;gap:3px;flex-wrap:wrap}
+.size-lbl{font-size:10px;color:#666;white-space:nowrap;margin:0 1px}
+.b-size{background:#1a1a28;color:#555;border:1px solid #2a2a3a;padding:1px 7px;font-size:10px;border-radius:3px}
+.b-size.on{background:#252540;color:#aaaaff;border-color:#4444aa}
 </style>
 </head>
 <body>
@@ -131,6 +155,16 @@ button[disabled]{opacity:.35;cursor:default}
       </div>
       <button class="b-court" onclick="act('court')">🛡 コート！</button>
       <button class="b-help" onclick="document.getElementById('helpOverlay').style.display='block'">❓ ヘルプ（９割ギミック図解）</button>
+      <div class="size-row">
+        <span class="size-lbl">時計</span>
+        <button class="b-size on" id="clk-sz-lg" onclick="setClockSz('lg')">大</button>
+        <button class="b-size" id="clk-sz-md" onclick="setClockSz('md')">中</button>
+        <button class="b-size" id="clk-sz-sm" onclick="setClockSz('sm')">小</button>
+        <span class="size-lbl" style="margin-left:6px">ボタン</span>
+        <button class="b-size on" id="btn-sz-lg" onclick="setBtnSz('lg')">大</button>
+        <button class="b-size" id="btn-sz-md" onclick="setBtnSz('md')">中</button>
+        <button class="b-size" id="btn-sz-sm" onclick="setBtnSz('sm')">小</button>
+      </div>
       <div id="info">ルームを作成／参加してからタイマーを操作してください</div>
     </div>
 
@@ -223,6 +257,18 @@ function togglePh(id) {
   sec.style.display = hidden ? '' : 'none';
   btn.classList.toggle('on', hidden);
   btn.classList.toggle('off', !hidden);
+}
+function setClockSz(s) {
+  const clk = document.getElementById('clock');
+  clk.classList.remove('sz-md', 'sz-sm');
+  if (s !== 'lg') clk.classList.add('sz-' + s);
+  ['lg','md','sm'].forEach(x => document.getElementById('clk-sz-' + x).classList.toggle('on', x === s));
+}
+function setBtnSz(s) {
+  const lft = document.getElementById('left');
+  lft.classList.remove('bsz-md', 'bsz-sm');
+  if (s !== 'lg') lft.classList.add('bsz-' + s);
+  ['lg','md','sm'].forEach(x => document.getElementById('btn-sz-' + x).classList.toggle('on', x === s));
 }
 
 // ════════════════════════════════════════
