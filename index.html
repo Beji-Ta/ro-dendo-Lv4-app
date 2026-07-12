@@ -278,6 +278,7 @@ const KYOURAN_CYCLE = 60; // seconds
 // warn配列はdoStart()時にoffsetを加味して生成
 let warn20 = [];
 let warn10 = [];
+let warn5  = [];
 
 // ════════════════════════════════════════
 //  STATE
@@ -344,6 +345,7 @@ function doStart(ts, off) {
   // offset を加味してwarn配列を生成
   warn20 = Array.from({length: 30}, (_, i) => (40 + kyouranOffset) + i * 60);
   warn10 = Array.from({length: 30}, (_, i) => (50 + kyouranOffset) + i * 60);
+  warn5  = Array.from({length: 30}, (_, i) => (55 + kyouranOffset) + i * 60);
   warned.clear();
   // トグルボタンの見た目を同期（ゲスト含む）
   el('btnOffset').classList.toggle('on', kyouranOffset === 5);
@@ -383,6 +385,7 @@ function tick() {
   const allNext = [
     ...warn20.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'狂乱20秒前'})),
     ...warn10.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'10秒前'})),
+    ...warn5.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'5秒前'})),
   ].sort((a, b) => a.t - b.t);
   if (allNext.length) {
     const {t, label} = allNext[0];
@@ -413,6 +416,16 @@ function tick() {
       setTimeout(() => setWarn('off'), 9500);
     }
   });
+
+  // 5秒前コール（音声）
+  warn5.forEach(t => {
+    if (!warned.has('5_' + t) && elapsed >= t && elapsed < t + 5) {
+      warned.add('5_' + t);
+      speakText('5秒前');
+      setWarn('5');
+      setTimeout(() => setWarn('off'), 4500);
+    }
+  });
 }
 
 function setWarn(type) {
@@ -425,6 +438,10 @@ function setWarn(type) {
     box.classList.add('w20');
   } else if (type === '10') {
     box.textContent = '⚠ 狂乱まで10秒！ ⚠';
+    box.classList.add('w10');
+    clk.classList.add('danger');
+  } else if (type === '5') {
+    box.textContent = '⚠ 狂乱まで5秒！ ⚠';
     box.classList.add('w10');
     clk.classList.add('danger');
   }
