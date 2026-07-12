@@ -333,14 +333,15 @@ function speakCourt() {
 // ════════════════════════════════════════
 //  AUDIO – SpeechSynthesis
 // ════════════════════════════════════════
-function speakWaron() {
+function speakWaron(isOdd) {
   if (!('speechSynthesis' in window)) return;
   try {
     speechSynthesis.cancel();
-    const u   = new SpeechSynthesisUtterance('ワロン！');
+    const u   = new SpeechSynthesisUtterance(isOdd ? 'どこでもドア！' : 'ワロン！');
     u.lang    = 'ja-JP';
-    u.rate    = 0.85;
-    u.pitch   = 1.1;
+    // 奇数秒の押下時は大山のぶ代（ドラえもん）風の低くしゃがれた声質に寄せる
+    u.rate    = isOdd ? 0.78 : 0.85;
+    u.pitch   = isOdd ? 0.55 : 1.1;
     u.volume  = 1;
     speechSynthesis.speak(u);
   } catch (e) { console.warn('SpeechSynthesis:', e); }
@@ -566,7 +567,7 @@ function act(type) {
   let msg;
   if      (type === 'start')  msg = { k: 's', elapsedMs: 0, off: kyouranOffset };
   else if (type === 'reset')  msg = { k: 'r' };
-  else if (type === 'dragon') msg = { k: 'd' };
+  else if (type === 'dragon') msg = { k: 'd', odd: new Date().getSeconds() % 2 === 1 };
   else if (type === 'court')  msg = { k: 'c' };
   else return;
   handleMsg(msg); // apply locally
@@ -578,7 +579,7 @@ function handleMsg(msg) {
   // タイマー開始時刻を再計算する（＝相手とのPC時計のズレを無視できる）
   if      (msg.k === 's') doStart(Date.now() - (msg.elapsedMs || 0) - NETWORK_LAG_MS, msg.off);
   else if (msg.k === 'r') doReset();
-  else if (msg.k === 'd') speakWaron();
+  else if (msg.k === 'd') speakWaron(msg.odd);
   else if (msg.k === 'c') speakCourt();
 }
 
