@@ -341,7 +341,7 @@ function speakWaron(isOdd) {
   if (!('speechSynthesis' in window)) return;
   try {
     speechSynthesis.cancel();
-    const u   = new SpeechSynthesisUtterance(isOdd ? 'どこでもぉーー、どあぁっ！' : 'ワロン！');
+    const u   = new SpeechSynthesisUtterance(isOdd ? 'どぉこぉでもぉ、どあっ！' : 'ワロン！');
     u.lang    = 'ja-JP';
     if (isOdd) {
       // ── 大山信代風チューニング ──
