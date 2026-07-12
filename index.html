@@ -337,12 +337,18 @@ function speakWaron(isOdd) {
   if (!('speechSynthesis' in window)) return;
   try {
     speechSynthesis.cancel();
-    const u   = new SpeechSynthesisUtterance(isOdd ? 'どこでもドア！' : 'ワロン！');
+    const u   = new SpeechSynthesisUtterance(isOdd ? 'どこでもぉーー、どあぁっ！' : 'ワロン！');
     u.lang    = 'ja-JP';
-    // 奇数秒の押下時は大山のぶ代（ドラえもん）風の低くしゃがれた声質に寄せる
-    u.rate    = isOdd ? 0.78 : 0.85;
-    u.pitch   = isOdd ? 0.55 : 1.1;
-    u.volume  = 1;
+    if (isOdd) {
+      // ── 大山信代風チューニング ──
+      u.rate  = 0.85;  // 速度：少しだけ遅くして「ねっとり感」を出す（標準は1.0）
+      u.pitch = 0.75;  // 音高：少し低くして「ダミ声」に近づける（標準は1.0）
+      u.volume = 1.0;  // 音量：最大
+    } else {
+      u.rate    = 0.85;
+      u.pitch   = 1.1;
+      u.volume  = 1;
+    }
     speechSynthesis.speak(u);
   } catch (e) { console.warn('SpeechSynthesis:', e); }
 }
