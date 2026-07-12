@@ -289,8 +289,10 @@ let isHost  = false;
 let startTs = null;     // Unix ms when fight started (null = not running)
 let ticker  = null;
 const warned = new Set();
+let lastProcessedElapsed = -1;  // tick()の秒重複判定用
 let audioCtx = null;
 let kyouranOffset = 0;  // 0 or 5 (+5秒モード)
+const NETWORK_LAG_MS = 100;  // START信号の送受信ラグ簡易補正値
 
 // ════════════════════════════════════════
 //  AUDIO – Web Audio API
@@ -347,6 +349,7 @@ function doStart(ts, off) {
   warn10 = Array.from({length: 30}, (_, i) => (50 + kyouranOffset) + i * 60);
   warn5  = Array.from({length: 30}, (_, i) => (55 + kyouranOffset) + i * 60);
   warned.clear();
+  lastProcessedElapsed = -1;
   // トグルボタンの見た目を同期（ゲスト含む）
   el('btnOffset').classList.toggle('on', kyouranOffset === 5);
   el('btnOffset').textContent = kyouranOffset === 5 ? '+5秒 ON' : '+5秒';
@@ -359,6 +362,7 @@ function doReset() {
   ticker  = null;
   startTs = null;
   warned.clear();
+  lastProcessedElapsed = -1;
   el('clock').textContent = '00:00';
   el('clock').classList.remove('danger');
   setWarn('off');
@@ -373,6 +377,37 @@ function tick() {
   const elapsed = Math.floor((Date.now() - startTs) / 1000);
   el('clock').textContent = fmt(elapsed);
 
+  // タブがバックグラウンドで一瞬止まっても、1秒ごとに一度だけ判定する
+  // （elapsed >= t && elapsed < t+5 の範囲判定だとtickの遅延で二重発火/未発火の恐れがあるため）
+  if (elapsed !== lastProcessedElapsed) {
+    lastProcessedElapsed = elapsed;
+
+    // 20秒前コール（音声）
+    if (warn20.includes(elapsed) && !warned.has('20_' + elapsed)) {
+      warned.add('20_' + elapsed);
+      speakText('狂乱20秒前');
+      setWarn('20');
+      setTimeout(() => setWarn('off'), 4500);
+    }
+
+    // 10秒前コール（音声）
+    if (warn10.includes(elapsed) && !warned.has('10_' + elapsed)) {
+      warned.add('10_' + elapsed);
+      speakText('10秒前');
+      setWarn('10');
+      setTimeout(() => setWarn('off'), 9500);
+    }
+
+    // 5秒前コール（音声）
+    if (warn5.includes(elapsed) && !warned.has('5_' + elapsed)) {
+      warned.add('5_' + elapsed);
+      speakText('5秒前');
+      setWarn('5');
+      setTimeout(() => setWarn('off'), 4500);
+    }
+  }
+
+  // ── 以下、プログレスバーや次コール表示は毎tick再描画でOK ──
   // Kyouran cycle progress bar（offset後の経過でサイクル計算）
   const effElapsed  = Math.max(0, elapsed - kyouranOffset);
   const posInCycle  = effElapsed % KYOURAN_CYCLE;
@@ -380,7 +415,7 @@ function tick() {
   el('kyouranFill').style.width = pct + '%';
   el('kyouranSec').textContent  = elapsed < kyouranOffset ? '--s' : posInCycle + 's';
 
-  // Next warning display（20秒前・10秒前のうち直近を表示）
+  // Next warning display（20秒前・10秒前・5秒前のうち直近を表示）
   const nEl = el('nxtWarn');
   const allNext = [
     ...warn20.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'狂乱20秒前'})),
@@ -396,36 +431,6 @@ function tick() {
     nEl.textContent = '警告スケジュール終了';
     nEl.style.color = '#666';
   }
-
-  // 20秒前コール（音声）
-  warn20.forEach(t => {
-    if (!warned.has('20_' + t) && elapsed >= t && elapsed < t + 5) {
-      warned.add('20_' + t);
-      speakText('狂乱20秒前');
-      setWarn('20');
-      setTimeout(() => setWarn('off'), 4500);
-    }
-  });
-
-  // 10秒前コール（音声）
-  warn10.forEach(t => {
-    if (!warned.has('10_' + t) && elapsed >= t && elapsed < t + 5) {
-      warned.add('10_' + t);
-      speakText('10秒前');
-      setWarn('10');
-      setTimeout(() => setWarn('off'), 9500);
-    }
-  });
-
-  // 5秒前コール（音声）
-  warn5.forEach(t => {
-    if (!warned.has('5_' + t) && elapsed >= t && elapsed < t + 5) {
-      warned.add('5_' + t);
-      speakText('5秒前');
-      setWarn('5');
-      setTimeout(() => setWarn('off'), 4500);
-    }
-  });
 }
 
 function setWarn(type) {
@@ -490,8 +495,9 @@ function initPeer(myId, hostId) {
   peer.on('connection', c => {
     addConn(c, true);
     // Send current timer state so late joiners sync immediately
+    // 絶対時刻ではなく「経過時間(ms)」を送ることで、双方のPC時計のズレを排除する
     c.on('open', () => {
-      if (startTs !== null) c.send({ k: 's', ts: startTs });
+      if (startTs !== null) c.send({ k: 's', elapsedMs: Date.now() - startTs, off: kyouranOffset });
     });
   });
 
@@ -546,7 +552,7 @@ function bcast(msg) {
 function act(type) {
   unlockAudio();
   let msg;
-  if      (type === 'start')  msg = { k: 's', ts: Date.now(), off: kyouranOffset };
+  if      (type === 'start')  msg = { k: 's', elapsedMs: 0, off: kyouranOffset };
   else if (type === 'reset')  msg = { k: 'r' };
   else if (type === 'dragon') msg = { k: 'd' };
   else if (type === 'court')  msg = { k: 'c' };
@@ -556,7 +562,9 @@ function act(type) {
 }
 
 function handleMsg(msg) {
-  if      (msg.k === 's') doStart(msg.ts, msg.off);
+  // 相手のPC絶対時刻(ts)には依存せず、経過時間(elapsedMs)を自分の時計に載せ替えて
+  // タイマー開始時刻を再計算する（＝相手とのPC時計のズレを無視できる）
+  if      (msg.k === 's') doStart(Date.now() - (msg.elapsedMs || 0) - NETWORK_LAG_MS, msg.off);
   else if (msg.k === 'r') doReset();
   else if (msg.k === 'd') speakWaron();
   else if (msg.k === 'c') speakText('コート・ワロン！');
