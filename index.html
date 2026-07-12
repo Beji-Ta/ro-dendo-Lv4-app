@@ -311,9 +311,9 @@ function speakText(text, opts = {}) {
     speechSynthesis.cancel();
     const u  = new SpeechSynthesisUtterance(text);
     u.lang   = 'ja-JP';
-    u.rate   = opts.rate  ?? 0.85;
-    u.pitch  = opts.pitch ?? 1.1;
-    u.volume = 1;
+    u.rate   = opts.rate   ?? 0.85;
+    u.pitch  = opts.pitch  ?? 1.1;
+    u.volume = opts.volume ?? 1;
     speechSynthesis.speak(u);
   } catch(e) { console.warn('speakText:', e); }
 }
@@ -323,8 +323,12 @@ let courtCallCount = 0;
 function speakCourt() {
   courtCallCount++;
   if (courtCallCount % 5 === 0) {
-    // 大山のぶ代（ドラえもん）風の低くしゃがれた声質に寄せる
-    speakText('君は実に、コートだなぁ', { pitch: 0.55, rate: 0.78 });
+    // ── 大山信代風チューニング ──
+    speakText('きみはぁーー、じつに、こぉおーと、だねぇ〜', {
+      rate:   0.85,  // 速度：少しだけ遅くして「ねっとり感」を出す（標準は1.0）
+      pitch:  0.75,  // 音高：少し低くして「ダミ声」に近づける（標準は1.0）
+      volume: 1.0,   // 音量：最大
+    });
   } else {
     speakText('コート・ワロン！');
   }
