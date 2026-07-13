@@ -27,6 +27,8 @@ button[disabled]{opacity:.35;cursor:default}
 .b-reset{background:#4a4a5a;color:#ccc;padding:6px 12px;font-size:14px}
 .b-offset{background:#333;color:#777;padding:6px 10px;font-size:13px;border:1px solid #555}
 .b-offset.on{background:#1a6a44;color:#44ffaa;border-color:#44ffaa}
+.b-doraemon{background:#333;color:#777;padding:4px 10px;font-size:12px;border:1px solid #555;border-radius:4px}
+.b-doraemon.on{background:#0a3a8a;color:#66bbff;border-color:#66bbff}
 .b-dragon{background:linear-gradient(130deg,#6a18cc 0%,#c83aff 100%);color:#fff;padding:7px 0;font-size:15px;width:100%}
 .b-court{background:linear-gradient(130deg,#0a5a8a 0%,#1a9adf 100%);color:#fff;padding:6px 0;font-size:14px;width:100%}
 .b-help{background:#2a2a3a;color:#aaa;border:1px solid #444;padding:5px 0;font-size:12px;width:100%}
@@ -95,6 +97,7 @@ button[disabled]{opacity:.35;cursor:default}
 /* ── Phase card max-width ── */
 .ph{max-width:30em}
 /* ── Clock sizes ── */
+#clock.sz-xl{font-size:105px}
 #clock.sz-md{font-size:52px}
 #clock.sz-sm{font-size:36px}
 /* ── Button sizes (medium) ── */
@@ -157,6 +160,7 @@ button[disabled]{opacity:.35;cursor:default}
       <button class="b-help" onclick="document.getElementById('helpOverlay').style.display='block'">❓ ヘルプ（９割ギミック図解）</button>
       <div class="size-row">
         <span class="size-lbl">時計</span>
+        <button class="b-size" id="clk-sz-xl" onclick="setClockSz('xl')">特大</button>
         <button class="b-size on" id="clk-sz-lg" onclick="setClockSz('lg')">大</button>
         <button class="b-size" id="clk-sz-md" onclick="setClockSz('md')">中</button>
         <button class="b-size" id="clk-sz-sm" onclick="setClockSz('sm')">小</button>
@@ -164,6 +168,10 @@ button[disabled]{opacity:.35;cursor:default}
         <button class="b-size on" id="btn-sz-lg" onclick="setBtnSz('lg')">大</button>
         <button class="b-size" id="btn-sz-md" onclick="setBtnSz('md')">中</button>
         <button class="b-size" id="btn-sz-sm" onclick="setBtnSz('sm')">小</button>
+      </div>
+      <div class="size-row">
+        <span class="size-lbl">ボイス</span>
+        <button class="b-doraemon" id="btnDoraemon" onclick="toggleDoraemon()" title="竜ギミック・コート発動時のボイスを大山信代風に固定">🚪 ドラえもん</button>
       </div>
       <div id="info">ルームを作成／参加してからタイマーを操作してください</div>
     </div>
@@ -260,9 +268,9 @@ function togglePh(id) {
 }
 function setClockSz(s) {
   const clk = document.getElementById('clock');
-  clk.classList.remove('sz-md', 'sz-sm');
+  clk.classList.remove('sz-xl', 'sz-md', 'sz-sm');
   if (s !== 'lg') clk.classList.add('sz-' + s);
-  ['lg','md','sm'].forEach(x => document.getElementById('clk-sz-' + x).classList.toggle('on', x === s));
+  ['xl','lg','md','sm'].forEach(x => document.getElementById('clk-sz-' + x).classList.toggle('on', x === s));
 }
 function setBtnSz(s) {
   const lft = document.getElementById('left');
@@ -293,6 +301,7 @@ let lastProcessedElapsed = -1;  // tick()の秒重複判定用
 let audioCtx = null;
 let kyouranOffset = 0;  // 0 or 5 (+5秒モード)
 const NETWORK_LAG_MS = 100;  // START信号の送受信ラグ簡易補正値
+let doraemonMode = false;  // ONの間、竜ギミック・コート発動ボイスを常に大山信代風にする
 
 // ════════════════════════════════════════
 //  AUDIO – Web Audio API
@@ -318,11 +327,8 @@ function speakText(text, opts = {}) {
   } catch(e) { console.warn('speakText:', e); }
 }
 
-let courtCallCount = 0;
-
-function speakCourt() {
-  courtCallCount++;
-  if (courtCallCount % 5 === 0) {
+function speakCourt(doraemon) {
+  if (doraemon) {
     // ── 大山信代風チューニング ──
     speakText('きみはじつに、こぉおーと、だなぁ', {
       rate:   0.85,  // 速度：少しだけ遅くして「ねっとり感」を出す（標準は1.0）
@@ -337,13 +343,13 @@ function speakCourt() {
 // ════════════════════════════════════════
 //  AUDIO – SpeechSynthesis
 // ════════════════════════════════════════
-function speakWaron(isOdd) {
+function speakWaron(doraemon) {
   if (!('speechSynthesis' in window)) return;
   try {
     speechSynthesis.cancel();
-    const u   = new SpeechSynthesisUtterance(isOdd ? 'どぉこぉでもぉ、どあっ！' : 'ワロン！');
+    const u   = new SpeechSynthesisUtterance(doraemon ? 'どぉこぉでもぉ、どあっ！' : 'ワロン！');
     u.lang    = 'ja-JP';
-    if (isOdd) {
+    if (doraemon) {
       // ── 大山信代風チューニング ──
       u.rate  = 0.85;  // 速度：少しだけ遅くして「ねっとり感」を出す（標準は1.0）
       u.pitch = 0.75;  // 音高：少し低くして「ダミ声」に近づける（標準は1.0）
@@ -577,8 +583,8 @@ function act(type) {
   let msg;
   if      (type === 'start')  msg = { k: 's', elapsedMs: 0, off: kyouranOffset };
   else if (type === 'reset')  msg = { k: 'r' };
-  else if (type === 'dragon') msg = { k: 'd', odd: new Date().getSeconds() % 2 === 1 };
-  else if (type === 'court')  msg = { k: 'c' };
+  else if (type === 'dragon') msg = { k: 'd', doraemon: doraemonMode };
+  else if (type === 'court')  msg = { k: 'c', doraemon: doraemonMode };
   else return;
   handleMsg(msg); // apply locally
   bcast(msg);     // send to all peers
@@ -589,8 +595,8 @@ function handleMsg(msg) {
   // タイマー開始時刻を再計算する（＝相手とのPC時計のズレを無視できる）
   if      (msg.k === 's') doStart(Date.now() - (msg.elapsedMs || 0) - NETWORK_LAG_MS, msg.off);
   else if (msg.k === 'r') doReset();
-  else if (msg.k === 'd') speakWaron(msg.odd);
-  else if (msg.k === 'c') speakCourt();
+  else if (msg.k === 'd') speakWaron(msg.doraemon);
+  else if (msg.k === 'c') speakCourt(msg.doraemon);
 }
 
 function toggleOffset() {
@@ -598,6 +604,12 @@ function toggleOffset() {
   const on = kyouranOffset === 5;
   el('btnOffset').classList.toggle('on', on);
   el('btnOffset').textContent = on ? '+5秒 ON' : '+5秒';
+}
+
+function toggleDoraemon() {
+  doraemonMode = !doraemonMode;
+  el('btnDoraemon').classList.toggle('on', doraemonMode);
+  el('btnDoraemon').textContent = doraemonMode ? '🚪 ドラえもん ON' : '🚪 ドラえもん';
 }
 
 // ════════════════════════════════════════
