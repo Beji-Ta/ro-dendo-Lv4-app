@@ -656,6 +656,7 @@ function handleMsg(msg) {
   else if (msg.k === 'd') speakWaron(msg.doraemon);      // 竜ギミックのセリフ再生
   else if (msg.k === 'c') speakCourt(msg.doraemon);      // コートのセリフ再生
   else if (msg.k === 'v') applyDoraemon(msg.on);         // ドラえもんモードのON/OFF反映
+  else if (msg.k === 'n') applyRoomCount(msg.count);     // ホストから届いた実際の参加人数を反映
 }
 
 // 「+5秒」トグルボタンのローカルクリック処理。実際の反映・全員への伝播はact('start')実行時に
@@ -721,11 +722,22 @@ function copyRoom() {
 // 左パネル下部の案内メッセージ（#info）を書き換える
 function setInfo(txt) { el('info').textContent = txt; }
 
-// 接続中の人数表示（#pCount）とホストバッジの接続人数を更新する
+// 接続中の人数表示（#pCount）とホストバッジの接続人数を更新する。
+// ホストは全ゲストと直接つながっているため実際の総人数を把握できるが、
+// ゲストはホストへの接続1本しか持たない星型トポロジーのため、自力では総人数が分からない。
+// そこでホストはこの関数が呼ばれるたび、実際の総人数を全ゲストへブロードキャストして表示を合わせる。
 function updCount() {
   const active = conns.filter(c => c.open).length;   // 現在オープン中の接続数（自分は含まない）
   el('pCount').textContent = active ? '👥 ' + (active + 1) + '人' : '';   // 自分を含めた人数を表示
-  if (isHost) setBadge('ホスト（' + active + '人接続中）', 'ok');
+  if (isHost) {
+    setBadge('ホスト（' + active + '人接続中）', 'ok');
+    bcast({ k: 'n', count: active + 1 });  // ホスト自身を含めた実際の総人数を全ゲストに通知
+  }
+}
+
+// ホストから届いた実際の参加人数（ホスト＋全ゲスト）をゲスト側の人数表示にそのまま反映する
+function applyRoomCount(count) {
+  el('pCount').textContent = count > 1 ? '👥 ' + count + '人' : '';
 }
 </script>
 </body>
