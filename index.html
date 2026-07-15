@@ -258,23 +258,32 @@ button[disabled]{opacity:.35;cursor:default}
 </div><!-- /#app -->
 
 <script>
+// 右パネルの「フェーズ別カンペ」の該当セクションを開閉し、
+// トグルボタンの見た目（on=表示中／off=非表示）も合わせて切り替える
 function togglePh(id) {
-  const sec = document.getElementById('sec-' + id);
-  const btn = document.getElementById('btn-' + id);
-  const hidden = sec.style.display === 'none';
-  sec.style.display = hidden ? '' : 'none';
-  btn.classList.toggle('on', hidden);
-  btn.classList.toggle('off', !hidden);
+  const sec = document.getElementById('sec-' + id);       // カンペ本文のブロック
+  const btn = document.getElementById('btn-' + id);       // 開閉トグルボタン
+  const hidden = sec.style.display === 'none';             // 現在非表示なら true（＝これから表示する）
+  sec.style.display = hidden ? '' : 'none';                 // 表示⇔非表示を反転
+  btn.classList.toggle('on', hidden);                       // 表示状態にするならonクラスを付与
+  btn.classList.toggle('off', !hidden);                     // 非表示にするならoffクラスを付与
 }
+
+// 時計の文字サイズを 特大(xl)/大(lg)/中(md)/小(sm) の中から1つに切り替える
+// 「大」はCSSの基準サイズ(#clock)そのままなのでクラス付与不要
 function setClockSz(s) {
   const clk = document.getElementById('clock');
-  clk.classList.remove('sz-xl', 'sz-md', 'sz-sm');
-  if (s !== 'lg') clk.classList.add('sz-' + s);
+  clk.classList.remove('sz-xl', 'sz-md', 'sz-sm');          // 一旦すべてのサイズ指定クラスを外す
+  if (s !== 'lg') clk.classList.add('sz-' + s);              // 大以外なら該当サイズのクラスを付与
+  // 4つのサイズボタンのうち、選択中のものだけ on（強調表示）にする
   ['xl','lg','md','sm'].forEach(x => document.getElementById('clk-sz-' + x).classList.toggle('on', x === s));
 }
+
+// 左パネル全体のボタンサイズを 大(lg)/中(md)/小(sm) の中から1つに切り替える
+// #left要素にbsz-md/bsz-smクラスを付けることで、対応するCSSのpadding/font-size上書きが効く
 function setBtnSz(s) {
   const lft = document.getElementById('left');
-  lft.classList.remove('bsz-md', 'bsz-sm');
+  lft.classList.remove('bsz-md', 'bsz-sm');                 // 一旦サイズ指定クラスを外す（大が基準なのでクラス不要）
   if (s !== 'lg') lft.classList.add('bsz-' + s);
   ['lg','md','sm'].forEach(x => document.getElementById('btn-sz-' + x).classList.toggle('on', x === s));
 }
@@ -282,55 +291,63 @@ function setBtnSz(s) {
 // ════════════════════════════════════════
 //  CONSTANTS
 // ════════════════════════════════════════
-const KYOURAN_CYCLE = 60; // seconds
-// warn配列はdoStart()時にoffsetを加味して生成
-let warn20 = [];
-let warn10 = [];
-let warn5  = [];
+const KYOURAN_CYCLE = 60; // 狂乱の発生周期（秒）
+// 各コールが「戦闘開始から何秒後」に鳴るかを列挙した配列。
+// 中身は doStart() で kyouranOffset（+5秒モード）を加味して30周期分まとめて生成する。
+let warn20 = [];  // 狂乱20秒前コールのタイミング一覧
+let warn10 = [];  // 狂乱10秒前コールのタイミング一覧
+let warn5  = [];  // 狂乱5秒前コールのタイミング一覧
 
 // ════════════════════════════════════════
 //  STATE
 // ════════════════════════════════════════
-let peer    = null;
-const conns = [];       // DataConnection[]
-let isHost  = false;
-let startTs = null;     // Unix ms when fight started (null = not running)
-let ticker  = null;
-const warned = new Set();
-let lastProcessedElapsed = -1;  // tick()の秒重複判定用
-let audioCtx = null;
-let kyouranOffset = 0;  // 0 or 5 (+5秒モード)
-const NETWORK_LAG_MS = 100;  // START信号の送受信ラグ簡易補正値
-let doraemonMode = false;  // ONの間、竜ギミック・コート発動ボイスを常に大山信代風にする
+let peer    = null;     // PeerJSのPeerインスタンス（自分自身のP2P接続口）
+const conns = [];       // 接続中のDataConnection一覧（ホストは複数、ゲストはホストの1本のみ）
+let isHost  = false;    // 自分がルームのホストかどうか
+let startTs = null;     // 戦闘開始時刻（Unixミリ秒）。nullならタイマー停止中
+let ticker  = null;     // tick()を回すsetIntervalのID（停止時にclearするため保持）
+const warned = new Set();       // 「もう鳴らした」コールを記録し、二重発火を防ぐためのキー集合
+let lastProcessedElapsed = -1;  // tick()で最後に処理した経過秒数。同じ秒を2回処理しないための番人
+let audioCtx = null;    // Web Audio APIのコンテキスト（ユーザー操作を起点に音声再生を許可させるため保持）
+let kyouranOffset = 0;  // 狂乱発生タイミングのずれ。0 または 5（+5秒モード）
+const NETWORK_LAG_MS = 100;  // START信号の送受信にかかる通信ラグの簡易補正値（ミリ秒）
+let doraemonMode = false;  // ONの間、竜ギミック・コート発動ボイスを常に大山信代風にする（ルーム全体で共有）
 
 // ════════════════════════════════════════
 //  AUDIO – Web Audio API
 // ════════════════════════════════════════
+// ブラウザは「ユーザー操作なしに音を鳴らす」ことを制限しているため、
+// ボタンが押された直後（＝ユーザー操作の最中）にAudioContextを1回生成/再開しておくことで、
+// 以降のスピーチ合成含む音声再生がブロックされにくくなるようにする
 function unlockAudio() {
-  if (audioCtx) { audioCtx.resume(); return; }
+  if (audioCtx) { audioCtx.resume(); return; }  // 生成済みなら再開だけ行う
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();  // Safari向けにwebkit接頭辞もフォールバック
     audioCtx.resume();
   } catch (e) { console.warn('AudioContext:', e); }
 }
 
+// テキストを日本語音声で読み上げる共通関数。optsでrate(速度)/pitch(音高)/volume(音量)を上書き可能
 function speakText(text, opts = {}) {
-  if (!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window)) return;  // 非対応ブラウザでは何もしない
   try {
     // 何も再生中でない時にcancel()を呼ぶと、直後のspeak()が無音のまま失敗することがあるため
     // 実際に再生中/待機中の時だけcancel()する
     const wasBusy = speechSynthesis.speaking || speechSynthesis.pending;
-    if (wasBusy) speechSynthesis.cancel();
-    const u  = new SpeechSynthesisUtterance(text);
+    if (wasBusy) speechSynthesis.cancel();               // 前の発話を止めて新しい発話に差し替える
+    const u  = new SpeechSynthesisUtterance(text);        // 読み上げ内容を持つUtteranceを生成
     u.lang   = 'ja-JP';
-    u.rate   = opts.rate   ?? 0.85;
-    u.pitch  = opts.pitch  ?? 1.1;
+    u.rate   = opts.rate   ?? 0.85;   // 指定がなければやや遅めをデフォルトに
+    u.pitch  = opts.pitch  ?? 1.1;    // 指定がなければやや高めをデフォルトに
     u.volume = opts.volume ?? 1;
+    // cancel()した直後は少し待ってからspeak()しないと無音になることがあるため、
+    // 何かキャンセルした場合だけ50ms遅らせ、キャンセルが不要だった場合は即座に再生する
     if (wasBusy) setTimeout(() => speechSynthesis.speak(u), 50);
     else speechSynthesis.speak(u);
   } catch(e) { console.warn('speakText:', e); }
 }
 
+// 「コート」ボタン押下時のセリフ再生。ドラえもんモードONなら特別なセリフ＋声質に切り替える
 function speakCourt(doraemon) {
   if (doraemon) {
     // ── 大山信代風チューニング ──
@@ -340,13 +357,15 @@ function speakCourt(doraemon) {
       volume: 1.0,   // 音量：最大
     });
   } else {
-    speakText('コート・ワロン！');
+    speakText('コート・ワロン！');  // 通常時のセリフ
   }
 }
 
 // ════════════════════════════════════════
 //  AUDIO – SpeechSynthesis
 // ════════════════════════════════════════
+// 「竜ギミック発動」ボタン押下時のセリフ再生。doraemonがtrueならドラえもんモード用のセリフ・声質にする。
+// speakText()と処理が似ているが、声質パターンの分岐が細かいため専用関数として独立させている。
 function speakWaron(doraemon) {
   if (!('speechSynthesis' in window)) return;
   try {
@@ -362,10 +381,12 @@ function speakWaron(doraemon) {
       u.pitch = 0.75;  // 音高：少し低くして「ダミ声」に近づける（標準は1.0）
       u.volume = 1.0;  // 音量：最大
     } else {
+      // 通常時（標準の声質）
       u.rate    = 0.85;
       u.pitch   = 1.1;
       u.volume  = 1;
     }
+    // cancel()直後は一呼吸おいてから再生（speakText()と同じ理由）
     if (wasBusy) setTimeout(() => speechSynthesis.speak(u), 50);
     else speechSynthesis.speak(u);
   } catch (e) { console.warn('SpeechSynthesis:', e); }
@@ -374,65 +395,71 @@ function speakWaron(doraemon) {
 // ════════════════════════════════════════
 //  TIMER
 // ════════════════════════════════════════
-const pad2 = n => String(n).padStart(2, '0');
-const fmt  = s => `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
+const pad2 = n => String(n).padStart(2, '0');                          // 1桁の数値を"0"埋めして2桁にする
+const fmt  = s => `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;       // 秒数を "MM:SS" 表記の文字列に変換する
 
+// 戦闘タイマーを開始（または他ピアからの同期で再設定）する。
+// ts  : タイマーの起点となる開始時刻（自分のDate.now()基準に補正済みのUnixミリ秒）
+// off : +5秒モードのオフセット（5固定 or それ以外は0扱い）
 function doStart(ts, off) {
-  if (ticker) clearInterval(ticker);
+  if (ticker) clearInterval(ticker);   // 既存のタイマーが動いていれば一旦止める（多重起動防止）
   startTs = ts;
   kyouranOffset = (off === 5) ? 5 : 0;
-  // offset を加味してwarn配列を生成
-  warn20 = Array.from({length: 30}, (_, i) => (40 + kyouranOffset) + i * 60);
-  warn10 = Array.from({length: 30}, (_, i) => (50 + kyouranOffset) + i * 60);
-  warn5  = Array.from({length: 30}, (_, i) => (55 + kyouranOffset) + i * 60);
-  warned.clear();
-  lastProcessedElapsed = -1;
-  // トグルボタンの見た目を同期（ゲスト含む）
+  // 狂乱発生タイミング(60秒周期)に対して、offsetを加味した「何秒後に鳴らすか」の一覧を30周期分あらかじめ作る
+  warn20 = Array.from({length: 30}, (_, i) => (40 + kyouranOffset) + i * 60);  // 開始40秒後→以後60秒おき
+  warn10 = Array.from({length: 30}, (_, i) => (50 + kyouranOffset) + i * 60);  // 開始50秒後→以後60秒おき
+  warn5  = Array.from({length: 30}, (_, i) => (55 + kyouranOffset) + i * 60);  // 開始55秒後→以後60秒おき
+  warned.clear();               // 「鳴らした」記録をリセット（新しい戦闘なので）
+  lastProcessedElapsed = -1;    // tick()の秒重複判定用カウンタもリセット
+  // +5秒トグルボタンの見た目を同期（ホストが設定した値がゲスト側にも反映されるよう、受信時にも実行される）
   el('btnOffset').classList.toggle('on', kyouranOffset === 5);
   el('btnOffset').textContent = kyouranOffset === 5 ? '+5秒 ON' : '+5秒';
-  ticker = setInterval(tick, 200);
-  tick();
+  ticker = setInterval(tick, 200);  // 200ms間隔でtick()を回して時計・コールを更新
+  tick();                            // 初回分もすぐに1回実行して画面を即座に更新
 }
 
+// 戦闘タイマーを停止し、画面表示を初期状態に戻す
 function doReset() {
   if (ticker) clearInterval(ticker);
   ticker  = null;
-  startTs = null;
+  startTs = null;         // nullに戻すことで tick() が以後何もしなくなる
   warned.clear();
   lastProcessedElapsed = -1;
   el('clock').textContent = '00:00';
   el('clock').classList.remove('danger');
-  setWarn('off');
+  setWarn('off');                          // 警告表示ボックスを非表示に
   el('nxtWarn').textContent  = '― 待機中 ―';
   el('nxtWarn').style.color  = '#ffbb33';
-  el('kyouranFill').style.width = '0%';
+  el('kyouranFill').style.width = '0%';    // 狂乱周期プログレスバーを0に戻す
   el('kyouranSec').textContent  = '--s';
 }
 
+// 200msごとに呼ばれるメインループ。経過時間の表示更新・音声コール発火・
+// 狂乱周期プログレスバーの更新・次コール表示の更新をまとめて行う
 function tick() {
-  if (startTs === null) return;
-  const elapsed = Math.floor((Date.now() - startTs) / 1000);
-  el('clock').textContent = fmt(elapsed);
+  if (startTs === null) return;                                  // タイマー停止中は何もしない
+  const elapsed = Math.floor((Date.now() - startTs) / 1000);      // 開始からの経過秒数
+  el('clock').textContent = fmt(elapsed);                          // 時計表示を更新
 
   // タブがバックグラウンドで一瞬止まっても、1秒ごとに一度だけ判定する
   // （elapsed >= t && elapsed < t+5 の範囲判定だとtickの遅延で二重発火/未発火の恐れがあるため）
   if (elapsed !== lastProcessedElapsed) {
-    lastProcessedElapsed = elapsed;
+    lastProcessedElapsed = elapsed;   // この秒はもう処理済みとして記録
 
-    // 20秒前コール（音声）
+    // 20秒前コール（音声）：該当秒にちょうど到達し、かつまだ鳴らしていなければ発火
     if (warn20.includes(elapsed) && !warned.has('20_' + elapsed)) {
-      warned.add('20_' + elapsed);
+      warned.add('20_' + elapsed);          // 二重発火防止のため発火済みとして記録
       speakText('狂乱20秒前');
-      setWarn('20');
-      setTimeout(() => setWarn('off'), 4500);
+      setWarn('20');                         // 警告ボックスをオレンジ表示に
+      setTimeout(() => setWarn('off'), 4500); // 4.5秒後に警告表示を消す
     }
 
     // 10秒前コール（音声）
     if (warn10.includes(elapsed) && !warned.has('10_' + elapsed)) {
       warned.add('10_' + elapsed);
       speakText('10秒前');
-      setWarn('10');
-      setTimeout(() => setWarn('off'), 9500);
+      setWarn('10');                          // 警告ボックスを赤・点滅表示に、時計も赤くする
+      setTimeout(() => setWarn('off'), 9500);  // 10秒前〜0秒まで表示し続くよう9.5秒後に消す
     }
 
     // 5秒前コール（音声）
@@ -446,45 +473,48 @@ function tick() {
 
   // ── 以下、プログレスバーや次コール表示は毎tick再描画でOK ──
   // Kyouran cycle progress bar（offset後の経過でサイクル計算）
-  const effElapsed  = Math.max(0, elapsed - kyouranOffset);
-  const posInCycle  = effElapsed % KYOURAN_CYCLE;
-  const pct         = elapsed < kyouranOffset ? 0 : (posInCycle / KYOURAN_CYCLE) * 100;
-  el('kyouranFill').style.width = pct + '%';
-  el('kyouranSec').textContent  = elapsed < kyouranOffset ? '--s' : posInCycle + 's';
+  const effElapsed  = Math.max(0, elapsed - kyouranOffset);          // offset分を差し引いた実質経過秒
+  const posInCycle  = effElapsed % KYOURAN_CYCLE;                     // 現在の60秒周期内での位置
+  const pct         = elapsed < kyouranOffset ? 0 : (posInCycle / KYOURAN_CYCLE) * 100;  // 周期内の進捗率(%)
+  el('kyouranFill').style.width = pct + '%';         // プログレスバーの塗りつぶし幅を更新
+  el('kyouranSec').textContent  = elapsed < kyouranOffset ? '--s' : posInCycle + 's';  // 周期内の経過秒数表示
 
   // Next warning display（20秒前・10秒前・5秒前のうち直近を表示）
   const nEl = el('nxtWarn');
   const allNext = [
+    // それぞれの配列から「まだ来ていない最初の1件」だけを取り出し、ラベルを付けてまとめる
     ...warn20.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'狂乱20秒前'})),
     ...warn10.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'10秒前'})),
     ...warn5.filter(t => t > elapsed).slice(0, 1).map(t => ({t, label:'5秒前'})),
-  ].sort((a, b) => a.t - b.t);
+  ].sort((a, b) => a.t - b.t);  // 時刻が早い順に並べ、先頭が「次に来るコール」になる
   if (allNext.length) {
-    const {t, label} = allNext[0];
-    const rem = t - elapsed;
+    const {t, label} = allNext[0];      // 最も近い次のコールを取り出す
+    const rem = t - elapsed;             // 残り秒数
     nEl.textContent = `次のコール「${label}」まで ${rem}秒  (${fmt(t)})`;
-    nEl.style.color = rem <= 15 ? '#ff7744' : '#ffbb33';
+    nEl.style.color = rem <= 15 ? '#ff7744' : '#ffbb33';  // 残り15秒以内なら警告色に変える
   } else {
-    nEl.textContent = '警告スケジュール終了';
+    nEl.textContent = '警告スケジュール終了';   // 全30周期分のコールを消化した後の表示
     nEl.style.color = '#666';
   }
 }
 
+// 画面上部の警告ボックス（#warnBox）の表示状態を切り替える
+// type: '20'|'10'|'5' で該当メッセージ・色を表示、それ以外（'off'など）は何も付けず非表示に戻す
 function setWarn(type) {
   const box = el('warnBox');
   const clk = el('clock');
-  box.className = '';
-  clk.classList.remove('danger');
+  box.className = '';              // 一旦クラスをリセット（＝非表示状態に戻す。CSSでvisibility:hiddenが基本）
+  clk.classList.remove('danger');  // 時計の赤色強調も一旦解除
   if (type === '20') {
     box.textContent = '🔶 狂乱まで20秒！';
-    box.classList.add('w20');
+    box.classList.add('w20');       // オレンジ色の警告スタイル
   } else if (type === '10') {
     box.textContent = '⚠ 狂乱まで10秒！ ⚠';
-    box.classList.add('w10');
-    clk.classList.add('danger');
+    box.classList.add('w10');       // 赤色・点滅の警告スタイル
+    clk.classList.add('danger');    // 時計自体も赤く強調
   } else if (type === '5') {
     box.textContent = '⚠ 狂乱まで5秒！ ⚠';
-    box.classList.add('w10');
+    box.classList.add('w10');       // 10秒前と同じ見た目（赤・点滅）を流用
     clk.classList.add('danger');
   }
 }
@@ -492,14 +522,16 @@ function setWarn(type) {
 // ════════════════════════════════════════
 //  PEERJS – Setup
 // ════════════════════════════════════════
+// 「ルーム作成（ホスト）」ボタンの処理。入力されたIDでルームを開設し、なければ4桁のランダムIDを自動生成する
 function createRoom() {
-  unlockAudio();
+  unlockAudio();                        // ボタン押下＝ユーザー操作のタイミングで音声再生の許可を取っておく
   const inp = el('roomInput').value.trim();
-  const id  = inp || String(Math.floor(1000 + Math.random() * 9000));
+  const id  = inp || String(Math.floor(1000 + Math.random() * 9000));  // 未入力なら1000〜9999のランダムID
   isHost    = true;
   initPeer(id, null);
 }
 
+// 「ルーム参加（ゲスト）」ボタンの処理。入力されたホストIDに接続する
 function joinRoom() {
   unlockAudio();
   const hostId = el('roomInput').value.trim();
@@ -508,37 +540,44 @@ function joinRoom() {
   initPeer(null, hostId);
 }
 
+// PeerJSの接続を初期化する。ホストなら自分のIDでPeerを開設して他者からの接続を待ち受け、
+// ゲストなら指定されたhostIdへ接続しにいく
 function initPeer(myId, hostId) {
-  if (peer) peer.destroy();
-  conns.length = 0;
+  if (peer) peer.destroy();     // 既存の接続があれば破棄してから作り直す（再接続時の多重接続防止）
+  conns.length = 0;              // 接続一覧をクリア
   setBadge('接続中…', '');
 
-  peer = myId ? new Peer(myId) : new Peer();
+  peer = myId ? new Peer(myId) : new Peer();  // myId指定時はそのIDで、なければPeerJSにランダムID発行させる
 
   peer.on('open', id => {
+    // 自分のPeer接続がシグナリングサーバーに登録できた（open）タイミング
     if (isHost) {
       setBadge('ホスト 待機中', 'ok');
-      showTag(id);
-      el('btnHost').disabled = true;
+      showTag(id);                    // 発行されたルームIDを画面に表示（コピー用）
+      el('btnHost').disabled = true;  // 二重にホストを開始できないようボタンを無効化
       setInfo('ルームIDをメンバーに共有してください');
     } else {
       setBadge('ホストへ接続中…', '');
-      const c = peer.connect(hostId, { reliable: true });
-      addConn(c, false);
+      const c = peer.connect(hostId, { reliable: true });  // ホストへ確実な配送のコネクションを張る
+      addConn(c, false);   // incoming=false（自分から発信した接続）として登録
     }
   });
 
   // Host receives incoming guest connections
+  // ホスト側のみ発火：ゲストが接続してきた時の処理
   peer.on('connection', c => {
-    addConn(c, true);
+    addConn(c, true);   // incoming=true（相手から接続してきた）として登録
     // Send current timer state so late joiners sync immediately
     // 絶対時刻ではなく「経過時間(ms)」を送ることで、双方のPC時計のズレを排除する
     c.on('open', () => {
+      // 戦闘が進行中なら、今の経過時間とoffset設定を新規接続者に送って即座に追いつかせる
       if (startTs !== null) c.send({ k: 's', elapsedMs: Date.now() - startTs, off: kyouranOffset });
+      // ドラえもんモードのON/OFF状態も送り、途中参加者のボタン表示・音声挙動を合わせる
       c.send({ k: 'v', on: doraemonMode });
     });
   });
 
+  // PeerJS自体のエラー（ID重複・接続失敗など）をユーザー向けメッセージに翻訳して表示
   peer.on('error', err => {
     const M = {
       'unavailable-id'  : 'ルームIDが使用中です。別のIDを試してください。',
@@ -551,35 +590,40 @@ function initPeer(myId, hostId) {
   });
 }
 
+// 1本のP2Pコネクション(DataConnection)にイベントハンドラを設定し、conns配列に登録する
+// incoming: 相手から接続されたか(true)、自分から接続しにいったか(false)
 function addConn(c, incoming) {
   conns.push(c);
 
   c.on('open', () => {
     if (!incoming) {
       // Guest successfully connected to host
+      // ゲスト側：ホストへの接続が確立したのでUIを「参加中」状態に更新
       setBadge('ルーム参加中', 'ok');
       el('btnHost').disabled = true;
       el('btnJoin').disabled = true;
       setInfo('ホストの操作でタイマーが同期します');
     }
-    updCount();
+    updCount();   // 接続人数表示を更新
   });
 
   c.on('data', msg => {
-    handleMsg(msg);
+    handleMsg(msg);   // 受信したメッセージを自分のタイマー/音声に反映
     // Host relays message to all other guests (hub-and-spoke)
+    // ホストは、受け取ったメッセージを送信元以外の全ゲストにも転送する（星型トポロジーの中継役）
     if (isHost) conns.forEach(oc => { if (oc !== c && oc.open) oc.send(msg); });
   });
 
   c.on('close', () => {
     const i = conns.indexOf(c);
-    if (i >= 0) conns.splice(i, 1);
+    if (i >= 0) conns.splice(i, 1);   // 切断された接続を一覧から除去
     updCount();
   });
 
   c.on('error', e => console.warn('conn error', e));
 }
 
+// 現在つながっている全ピアにメッセージを送信する（開いている接続のみ）
 function bcast(msg) {
   conns.forEach(c => { if (c.open) c.send(msg); });
 }
@@ -587,29 +631,35 @@ function bcast(msg) {
 // ════════════════════════════════════════
 //  ACTIONS
 // ════════════════════════════════════════
+// 操作ボタン（戦闘開始／リセット／竜ギミック／コート／ドラえもんトグル）共通の入口。
+// 押した本人の画面にすぐ反映（handleMsg）しつつ、同じ内容を全ピアに送って(bcast)全員の画面も揃える。
 function act(type) {
-  unlockAudio();
+  unlockAudio();   // ユーザー操作のタイミングで音声再生を許可させておく
   let msg;
-  if      (type === 'start')    msg = { k: 's', elapsedMs: 0, off: kyouranOffset };
-  else if (type === 'reset')    msg = { k: 'r' };
-  else if (type === 'dragon')   msg = { k: 'd', doraemon: doraemonMode };
-  else if (type === 'court')    msg = { k: 'c', doraemon: doraemonMode };
-  else if (type === 'doraemon') msg = { k: 'v', on: !doraemonMode };
+  if      (type === 'start')    msg = { k: 's', elapsedMs: 0, off: kyouranOffset };       // 開始：経過0で開始要求
+  else if (type === 'reset')    msg = { k: 'r' };                                          // リセット
+  else if (type === 'dragon')   msg = { k: 'd', doraemon: doraemonMode };                  // 竜ギミック発動
+  else if (type === 'court')    msg = { k: 'c', doraemon: doraemonMode };                  // コート発動
+  else if (type === 'doraemon') msg = { k: 'v', on: !doraemonMode };                       // ドラえもんモードの反転
   else return;
-  handleMsg(msg); // apply locally
-  bcast(msg);     // send to all peers
+  handleMsg(msg); // apply locally      … 自分の画面にも即座に反映
+  bcast(msg);     // send to all peers  … 他の全ピアへ同じメッセージを送信
 }
 
+// 自分または他ピアから届いたメッセージ(msg)を実際の画面・音声反映に変換するディスパッチャ。
+// msg.k（種類）ごとに対応する処理を呼び分ける。
 function handleMsg(msg) {
   // 相手のPC絶対時刻(ts)には依存せず、経過時間(elapsedMs)を自分の時計に載せ替えて
   // タイマー開始時刻を再計算する（＝相手とのPC時計のズレを無視できる）
-  if      (msg.k === 's') doStart(Date.now() - (msg.elapsedMs || 0) - NETWORK_LAG_MS, msg.off);
-  else if (msg.k === 'r') doReset();
-  else if (msg.k === 'd') speakWaron(msg.doraemon);
-  else if (msg.k === 'c') speakCourt(msg.doraemon);
-  else if (msg.k === 'v') applyDoraemon(msg.on);
+  if      (msg.k === 's') doStart(Date.now() - (msg.elapsedMs || 0) - NETWORK_LAG_MS, msg.off);  // 開始
+  else if (msg.k === 'r') doReset();                    // リセット
+  else if (msg.k === 'd') speakWaron(msg.doraemon);      // 竜ギミックのセリフ再生
+  else if (msg.k === 'c') speakCourt(msg.doraemon);      // コートのセリフ再生
+  else if (msg.k === 'v') applyDoraemon(msg.on);         // ドラえもんモードのON/OFF反映
 }
 
+// 「+5秒」トグルボタンのローカルクリック処理。実際の反映・全員への伝播はact('start')実行時に
+// off値として一緒に送られるので、ここでは自分の画面上の見た目とkyouranOffsetの値だけ更新する
 function toggleOffset() {
   kyouranOffset = kyouranOffset === 0 ? 5 : 0;
   const on = kyouranOffset === 5;
@@ -617,6 +667,8 @@ function toggleOffset() {
   el('btnOffset').textContent = on ? '+5秒 ON' : '+5秒';
 }
 
+// ドラえもんモードの状態を反映する（act('doraemon')経由のhandleMsgから呼ばれる＝自分の操作でも他人の操作でも通る）。
+// ボタンの見た目を更新し、ONにした瞬間だけ確認用のセリフを読み上げる。
 function applyDoraemon(on) {
   doraemonMode = on;
   el('btnDoraemon').classList.toggle('on', doraemonMode);
@@ -634,21 +686,24 @@ function applyDoraemon(on) {
 // ════════════════════════════════════════
 //  UI HELPERS
 // ════════════════════════════════════════
-const el = id => document.getElementById(id);
+const el = id => document.getElementById(id);   // document.getElementById()の短縮ヘルパー
 
+// ヘッダー右上の接続状況バッジ（未接続/ホスト待機中/エラー等）のテキストと色クラスを更新する
 function setBadge(txt, cls) {
   const b = el('badge');
   b.textContent = txt;
   b.className   = cls;
 }
 
+// ホストがルームを開設した際、発行されたルームIDをクリック可能なタグとして表示する
 function showTag(id) {
   const t = el('roomTag');
   t.textContent   = '📋 ルームID: ' + id;
-  t.dataset.rid   = id;
+  t.dataset.rid   = id;          // クリック時にコピーする値をdata属性に保持しておく
   t.style.display = 'inline';
 }
 
+// ルームIDタグがクリックされた時、IDをクリップボードにコピーする（未対応環境はprompt表示にフォールバック）
 function copyRoom() {
   const t  = el('roomTag');
   const id = t.dataset.rid;
@@ -656,18 +711,20 @@ function copyRoom() {
   const orig = '📋 ルームID: ' + id;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(id)
-      .then(() => { t.textContent = '✓ コピー済: ' + id; setTimeout(() => { t.textContent = orig; }, 2000); })
+      .then(() => { t.textContent = '✓ コピー済: ' + id; setTimeout(() => { t.textContent = orig; }, 2000); })  // 2秒後に表示を戻す
       .catch(() => prompt('ルームIDをコピーしてください:', id));
   } else {
     prompt('ルームIDをコピーしてください:', id);
   }
 }
 
+// 左パネル下部の案内メッセージ（#info）を書き換える
 function setInfo(txt) { el('info').textContent = txt; }
 
+// 接続中の人数表示（#pCount）とホストバッジの接続人数を更新する
 function updCount() {
-  const active = conns.filter(c => c.open).length;
-  el('pCount').textContent = active ? '👥 ' + (active + 1) + '人' : '';
+  const active = conns.filter(c => c.open).length;   // 現在オープン中の接続数（自分は含まない）
+  el('pCount').textContent = active ? '👥 ' + (active + 1) + '人' : '';   // 自分を含めた人数を表示
   if (isHost) setBadge('ホスト（' + active + '人接続中）', 'ok');
 }
 </script>
